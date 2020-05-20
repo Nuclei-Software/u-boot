@@ -11,6 +11,9 @@ choice
 config TARGET_AX25_AE350
 	bool "Support ax25-ae350"
 
+config TARGET_NUCLEI_HBIRD
+	bool "Support Nuclei HBird"
+
 config TARGET_MICROCHIP_ICICLE
 	bool "Support Microchip PolarFire-SoC Icicle Board"
 
@@ -57,6 +60,7 @@ source "board/emulation/qemu-riscv/Kconfig"
 source "board/microchip/mpfs_icicle/Kconfig"
 source "board/sifive/fu540/Kconfig"
 source "board/sipeed/maix/Kconfig"
+source "board/nuclei/hbird/Kconfig"
 
 # platform-specific options below
 source "arch/riscv/cpu/ax25/Kconfig"
