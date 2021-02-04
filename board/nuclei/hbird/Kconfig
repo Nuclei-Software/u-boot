@@ -27,8 +27,6 @@ config BOARD_SPECIFIC_OPTIONS # dummy
 	imply CMD_NET
 	imply CMD_PING
 	imply CMD_SF
-	imply CLK_SIFIVE
-	imply CLK_SIFIVE_FU540_PRCI
 	imply DOS_PARTITION
 	imply IP_DYN
 	imply MACB
