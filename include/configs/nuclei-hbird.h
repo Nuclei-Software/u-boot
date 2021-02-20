@@ -35,7 +35,6 @@
 	"kernel_addr_r=0xA4000000\0" \
 	"fdt_addr_r=0xA8000000\0" \
 	"scriptaddr=0xA8100000\0" \
-	"pxefile_addr_r=0xA8200000\0" \
 	"ramdisk_addr_r=0xA8300000\0" \
 	BOOTENV
 
