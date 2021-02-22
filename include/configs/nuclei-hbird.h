@@ -32,7 +32,7 @@
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	"fdt_high=0xffffffffffffffff\0" \
 	"initrd_high=0xffffffffffffffff\0" \
-	"kernel_addr_r=0xA4000000\0" \
+	"kernel_addr_r=0xA1000000\0" \
 	"fdt_addr_r=0xA8000000\0" \
 	"scriptaddr=0xA8100000\0" \
 	"ramdisk_addr_r=0xA8300000\0" \
