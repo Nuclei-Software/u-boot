@@ -248,6 +248,14 @@ config NXP_FSPI
 	  Enable the NXP FlexSPI (FSPI) driver. This driver can be used to
 	  access the SPI NOR flash on platforms embedding this NXP IP core.
 
+config NUCLEI_SPI
+	bool "Nuclei SPI driver"
+	help
+	  This driver supports the Nuclei SPI IP. If unsure say N.
+	  Enable the Nuclei SPI controller driver.
+
+	  The Nuclei SPI controller driver is found on various Nuclei SoCs.
+
 config OCTEON_SPI
 	bool "Octeon SPI driver"
 	depends on DM_PCI && (ARCH_OCTEON || ARCH_OCTEONTX || ARCH_OCTEONTX2)
