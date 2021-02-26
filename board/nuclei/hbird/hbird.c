@@ -14,12 +14,12 @@
 
 int board_init(void)
 {
-	/* Set Pinmux to enable QSPI2 for SD boot */
-	writel (0x01, (void *)0x10034000);
-	writel (0xec000000, (void *)0x10012008);
-	writel (0x10000000, (void *)0x10012004);
-	writel (0xfc030000, (void *)0x10012038);
-	writel (0x00, (void *)0x10034000); /* NUSPI Prescaler = 4 */
+	/*
+	 * pinmux are already initialized done in opensbi stage source code
+	 * opensbi/platform/nuclei/generic/platform.c
+	 * no need to re-initialize it, unless you have new configurations.
+	 */
+	
 	__asm__ __volatile__ ("fence w,o" : : : "memory");
 
 	printf ("Board: Initialized\n");
