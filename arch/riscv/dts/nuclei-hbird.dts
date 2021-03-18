@@ -9,8 +9,8 @@
 / {
   #address-cells = <2>;
   #size-cells = <2>;
-  compatible = "nuclei,ux600";
-  model = "nuclei,ux600";
+  compatible = "nuclei,demo-soc";
+  model = "nuclei,demo-soc";
 
   chosen {
      bootargs = "earlycon=sbi";
@@ -45,7 +45,7 @@
   soc {
     #address-cells = <2>;
     #size-cells = <2>;
-    compatible = "nuclei,ux600", "simple-bus";
+    compatible = "nuclei,demo-soc", "simple-bus";
     ranges;
   };
 
