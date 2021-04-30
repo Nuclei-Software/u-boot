@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (c) 2019 Nuclei System Technologies
+ * Copyright (c) 2019 Nuclei System Technology
  *
  * Authors:
  *   Ruigang Wan <rgwan@nucleisys.com>
@@ -16,7 +16,7 @@ int board_init(void)
 {
 	/*
 	 * pinmux are already initialized done in opensbi stage source code
-	 * opensbi/platform/nuclei/generic/platform.c
+	 * opensbi/platform/nuclei/demosoc/platform.c
 	 * no need to re-initialize it, unless you have new configurations.
 	 */
 	

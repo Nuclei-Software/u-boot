@@ -1,0 +1,6 @@
+Nuclei HBird Platform
+M:	Ruigang Wan <rgwan@nucleisys.com>
+S:	Maintained
+F:	board/nuclei/demosoc/
+F:	include/configs/nuclei-demosoc.h
+F:	configs/nuclei_demosoc_defconfig

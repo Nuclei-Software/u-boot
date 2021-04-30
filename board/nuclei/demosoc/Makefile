@@ -2,4 +2,4 @@
 #
 # Copyright (c) 2020 Nuclei System Technologies
 
-obj-y	+= hbird.o
+obj-y	+= demosoc.o

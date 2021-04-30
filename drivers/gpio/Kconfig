@@ -372,6 +372,12 @@ config SIFIVE_GPIO
 	  Device model driver for GPIO controller present in SiFive FU540 SoC. This
 	  driver enables GPIO interface on HiFive Unleashed A00 board.
 
+config NUCLEI_GPIO
+	bool "Nuclei GPIO driver"
+	depends on DM_GPIO
+	help
+	  Device model driver for Nuclei GPIO controller.
+
 config MVEBU_GPIO
 	bool "Marvell MVEBU GPIO driver"
 	depends on DM_GPIO && ARCH_MVEBU
