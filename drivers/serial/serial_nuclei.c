@@ -25,6 +25,9 @@ DECLARE_GLOBAL_DATA_PTR;
 #define UART_RXFIFO_DATA	0x000000ff
 #define UART_TXCTRL_TXEN	0x1
 #define UART_RXCTRL_RXEN	0x1
+/* No parity check, 8 bit len, cts/rts disable, dma disable */
+/* Only valid for Nuclei UART version > 1.0 */
+#define UART_SETUP_INITVAL	(0x3<<4)
 
 /* IP register */
 #define UART_IP_RXWM		0x2
@@ -37,6 +40,7 @@ struct uart_nuclei {
 	u32 ie;
 	u32 ip;
 	u32 div;
+	u32 setup;
 };
 
 struct nuclei_uart_platdata {
@@ -79,6 +83,7 @@ static void _nuclei_serial_init(struct uart_nuclei *regs)
 {
 	writel(UART_TXCTRL_TXEN, &regs->txctrl);
 	writel(UART_RXCTRL_RXEN, &regs->rxctrl);
+	writel(UART_SETUP_INITVAL, &regs->setup);
 	writel(0, &regs->ie);
 }
 
