@@ -14,6 +14,9 @@ config TARGET_AX25_AE350
 config TARGET_NUCLEI_DEMOSOC
 	bool "Support Nuclei Demo SoC"
 
+config TARGET_NUCLEI_GENERIC_SOC
+	bool "Support Nuclei Generic SoC"
+
 config TARGET_MICROCHIP_ICICLE
 	bool "Support Microchip PolarFire-SoC Icicle Board"
 
@@ -61,6 +64,7 @@ source "board/microchip/mpfs_icicle/Kconfig"
 source "board/sifive/fu540/Kconfig"
 source "board/sipeed/maix/Kconfig"
 source "board/nuclei/demosoc/Kconfig"
+source "board/nuclei/generic/Kconfig"
 
 # platform-specific options below
 source "arch/riscv/cpu/ax25/Kconfig"

@@ -1,0 +1,6 @@
+Nuclei Generic SoC Platform
+M:	Huaqi Fang <hqfang@nucleisys.com>
+S:	Maintained
+F:	board/nuclei/generic/
+F:	include/configs/nuclei-generic.h
+F:	configs/nuclei_generic_defconfig
