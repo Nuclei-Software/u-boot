@@ -21,6 +21,6 @@ int board_init(void)
 	
 	__asm__ __volatile__ ("fence w,o" : : : "memory");
 
-	printf ("Board: Initialized\n");
+	printf ("Board: Nuclei Generic SoC Initialized\n");
 	return 0;
 }
