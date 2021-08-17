@@ -8,8 +8,11 @@
 
 #include <common.h>
 #include <dm.h>
-#include <linux/delay.h>
-#include <linux/io.h>
+#include <env.h>
+#include <fdtdec.h>
+#include <image.h>
+#include <log.h>
+#include <init.h>
 
 
 int board_init(void)
@@ -24,4 +27,9 @@ int board_init(void)
 
 	printf ("Board: Initialized\n");
 	return 0;
+}
+
+phys_size_t get_effective_memsize(void)
+{
+	return 128*1024*1024;
 }

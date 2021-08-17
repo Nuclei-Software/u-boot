@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (c) 2021 Nuclei System Technology
+ * Copyright (c) 2019 Nuclei System Technology
  *
  * Authors:
- *   Huaqi Fang <hqfang@nucleisys.com>
+ *   Ruigang Wan <rgwan@nucleisys.com>
  */
 
 #include <common.h>
 #include <dm.h>
-#include <linux/delay.h>
-#include <linux/io.h>
+#include <env.h>
+#include <fdtdec.h>
+#include <image.h>
+#include <log.h>
+#include <init.h>
+
 
 int board_init(void)
 {
@@ -21,6 +25,11 @@ int board_init(void)
 	
 	__asm__ __volatile__ ("fence w,o" : : : "memory");
 
-	printf ("Board: Nuclei Generic SoC Initialized\n");
+	printf ("Board: Initialized\n");
 	return 0;
+}
+
+phys_size_t get_effective_memsize(void)
+{
+	return 128*1024*1024;
 }
