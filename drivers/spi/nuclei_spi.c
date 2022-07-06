@@ -21,7 +21,7 @@
 
 #define NUCLEI_SPI_MAX_CS		32
 
-#define NUCLEI_SPI_DEFAULT_DEPTH	8
+#define NUCLEI_SPI_DEFAULT_DEPTH	4
 #define NUCLEI_SPI_DEFAULT_BITS		8
 
 /* register offsets */
@@ -137,7 +137,12 @@ static void nuclei_spi_prep_device(struct nuclei_spi *spi,
 	writel(spi->cs_inactive, spi->regs + NUCLEI_SPI_REG_CSDEF);
 
 	/* Select the correct device */
-	writel(slave_plat->cs, spi->regs + NUCLEI_SPI_REG_CSID);
+	if ((spi->feature & NUCLEI_SPI_FEATURE_32B_DATA) == 0) {
+		writel(slave_plat->cs, spi->regs + NUCLEI_SPI_REG_CSID);
+	} else {
+		/* select device 0, using cs 1 when nuspi */
+		writel(slave_plat->cs + 1, spi->regs + NUCLEI_SPI_REG_CSID);
+	}
 }
 
 static int nuclei_spi_set_cs(struct nuclei_spi *spi,
@@ -400,6 +405,7 @@ static int nuclei_spi_set_speed(struct udevice *bus, uint speed)
 	if (speed > spi->freq)
 		speed = spi->freq;
 
+	//printf("set spi freq to %d\n", speed);
 	/* Cofigure max speed */
 	scale = (DIV_ROUND_UP(spi->freq >> 1, speed) - 1)
 					& NUCLEI_SPI_SCKDIV_DIV_MASK;

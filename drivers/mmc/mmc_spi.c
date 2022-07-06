@@ -275,6 +275,14 @@ static int mmc_spi_writedata(struct udevice *dev, const void *xbuf,
 
 static int dm_mmc_spi_set_ios(struct udevice *dev)
 {
+	struct mmc_spi_plat *plat = dev_get_platdata(dev);
+	struct mmc_spi_priv *priv = dev_get_priv(dev);
+
+	debug("%s: clock %u\n", __func__, plat->mmc.clock);
+
+	/* need to set max_hz for mmc probe, see MMC_SPI_MIN_CLOCK and MMC_SPI_MAX_CLOCK */
+	priv->spi->max_hz = plat->mmc.clock;
+
 	return 0;
 }
 
