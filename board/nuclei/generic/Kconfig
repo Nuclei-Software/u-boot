@@ -25,7 +25,6 @@ config BOARD_SPECIFIC_OPTIONS # dummy
 	imply CMD_FS_GENERIC
 	imply CMD_SF
 	imply DOS_PARTITION
-	imply NUCLEI_SERIAL
 	imply SPI
 	imply NUCLEI_SPI
 	imply SPI_FLASH
