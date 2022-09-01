@@ -84,7 +84,7 @@ static void _nuclei_serial_init(struct uart_nuclei *regs)
 	writel(UART_TXCTRL_TXEN, &regs->txctrl);
 	writel(UART_RXCTRL_RXEN, &regs->rxctrl);
 	writel(UART_SETUP_INITVAL, &regs->setup);
-	writel(0, &regs->ie);
+	writel(2, &regs->ie);
 }
 
 static int _nuclei_serial_putc(struct uart_nuclei *regs, const char c)
