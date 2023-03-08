@@ -11,6 +11,9 @@ choice
 config TARGET_AX25_AE350
 	bool "Support ax25-ae350"
 
+config TARGET_NUCLEI_GENERIC_SOC
+	bool "Support Nuclei Generic SoC"
+
 config TARGET_MICROCHIP_ICICLE
 	bool "Support Microchip PolarFire-SoC Icicle Board"
 
@@ -65,6 +68,7 @@ source "board/sifive/unleashed/Kconfig"
 source "board/sifive/unmatched/Kconfig"
 source "board/openpiton/riscv64/Kconfig"
 source "board/sipeed/maix/Kconfig"
+source "board/nuclei/generic/Kconfig"
 
 # platform-specific options below
 source "arch/riscv/cpu/ax25/Kconfig"
