@@ -11,6 +11,9 @@ choice
 config TARGET_AE350
 	bool "Support ae350"
 
+config TARGET_NUCLEI_GENERIC_SOC
+	bool "Support Nuclei Generic SoC"
+
 config TARGET_MICROCHIP_ICICLE
 	bool "Support Microchip PolarFire-SoC Icicle Board"
 
@@ -83,6 +86,7 @@ source "board/thead/th1520_lpi4a/Kconfig"
 source "board/openpiton/riscv64/Kconfig"
 source "board/sipeed/maix/Kconfig"
 source "board/starfive/visionfive2/Kconfig"
+source "board/nuclei/generic/Kconfig"
 
 # platform-specific options below
 source "arch/riscv/cpu/andesv5/Kconfig"
