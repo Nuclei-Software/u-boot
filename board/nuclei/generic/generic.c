@@ -36,8 +36,18 @@ int board_init(void)
 	return 0;
 }
 
+/*
+ * Use the default weak implementation in common/memsize.c
+ * If will get max memory size defined in dts memory section.
+ * 128M RAM may overlap the kernel/initrd/fdt section.
+ * Here we use most of the ram available and defined in dts
+ * to make sure when uboot reallocated, kernel/initrd/fdt section
+ * won't be touched
+ */
+#if 0
 phys_size_t get_effective_memsize(void)
 {
 	/* Here assume at least 128MB effective memory */
 	return 128*1024*1024;
 }
+#endif
