@@ -19,7 +19,7 @@
 #include <config_distro_bootcmd.h>
 
 /* kernel_addr_r, fdt_addr_r, scriptaddr and ramdisk_addr_r are all set to CONFIG_SYS_TEXT_BASE  */
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	"fdt_high=0xffffffffffffffff\0" \
 	"initrd_high=0xffffffffffffffff\0" \
 	"kernel_addr_r=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0"  \
