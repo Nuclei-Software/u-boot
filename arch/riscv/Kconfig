@@ -93,6 +93,7 @@ source "arch/riscv/cpu/fu540/Kconfig"
 source "arch/riscv/cpu/fu740/Kconfig"
 source "arch/riscv/cpu/generic/Kconfig"
 source "arch/riscv/cpu/jh7110/Kconfig"
+source "arch/riscv/cpu/nuclei/Kconfig"
 
 # architecture-specific options below
 
@@ -430,8 +431,19 @@ config RISCV_PRIV_1_9
 	  memory is configured was also changed.
 
 config STACK_SIZE_SHIFT
-	int
+	int "Stack size shift"
 	default 14
+	help
+	  On RISC-V, all harts boot independently. To be able to run on a
+	  multi-hart system, U-Boot must be extended with the functionality to
+	  manage all harts in the system. All harts entering U-Boot are registered
+	  in the available_harts mask stored in global data. A hart lottery system
+	  as used in the Linux kernel selects the hart U-Boot runs on. All other
+	  harts are halted. U-Boot can delegate functions to them using
+	  smp_call_function().
+
+	  Every hart has a valid pointer to the global data structure and a 16KiB
+	  stack by default. The stack size is set with CONFIG_STACK_SIZE_SHIFT
 
 config OF_BOARD_FIXUP
 	default y if OF_SEPARATE && RISCV_SMODE
