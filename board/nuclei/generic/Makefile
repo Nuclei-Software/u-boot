@@ -2,4 +2,8 @@
 #
 # Copyright (c) 2021 Nuclei System Technology
 
-obj-y	+= generic.o
+ifdef CONFIG_SPL_BUILD
+obj-y += spl.o
+else
+obj-y += generic.o
+endif
