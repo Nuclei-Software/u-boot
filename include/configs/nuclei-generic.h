@@ -22,10 +22,10 @@
 #define CFG_EXTRA_ENV_SETTINGS \
 	"fdt_high=0xffffffffffffffff\0" \
 	"initrd_high=0xffffffffffffffff\0" \
-	"kernel_addr_r=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0"  \
-	"fdt_addr_r=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0"  \
-	"scriptaddr=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0"  \
-	"ramdisk_addr_r=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0"  \
+	"mmcdev=0x0\0" \
+	"fit_addr= 0x83000000\0"  \
+	"mmcloadfit=fatload mmc ${mmcdev} ${fit_addr} kernel.itb\0" \
+	"mmcboot_fit=run mmcloadfit; bootm ${fit_addr}:kernel ${fit_addr}:ramdisk 0x88000000 \0" \
 	BOOTENV
 
 #define CONFIG_PREBOOT \
