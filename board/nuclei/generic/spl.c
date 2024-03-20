@@ -7,6 +7,7 @@
 #include <hang.h>
 #include <linux/delay.h>
 #include <linux/io.h>
+#include <image.h>
 
 extern char _end[];
 
@@ -63,4 +64,39 @@ int board_fit_config_name_match(const char *name)
 	/* boot using first FIT config */
 	return 0;
 }
+
+static int image_uncipher(const void *fit, int image_noffset,
+                             void **data, size_t *size)
+{
+       int cipher_noffset, ret;
+       void *dst;
+       size_t size_dst;
+
+       cipher_noffset = fdt_subnode_offset(fit, image_noffset,
+                                           FIT_CIPHER_NODENAME);
+       if (cipher_noffset < 0)
+               return 0;
+
+       log_info("decrypt %s...", fit_get_name(fit, image_noffset, NULL));
+       ret = fit_image_decrypt_data(fit, image_noffset, cipher_noffset,
+                                    *data, *size, &dst, &size_dst);
+       if (ret) {
+               log_info("Failed,err:0x%x\n", ret);
+               goto out;
+	   }
+
+       *data = dst;
+       *size = size_dst;
+
+       log_info("OK\n");
+ out:
+       return ret;
+}
+
+void board_fit_image_post_process(const void *fit, int node, void **p_image,
+                                 size_t *p_size)
+{
+       image_uncipher(fit, node, p_image, p_size);
+}
+
 #endif

@@ -144,6 +144,14 @@ config FIT_PRINT
         help
           Support printing the content of the fitImage in a verbose manner.
 
+config SPL_FIT_CIPHER
+	bool "Enable ciphering data in a SPL FIT uImages"
+	depends on SPL_DM && SPL_FIT
+	select SPL_AES
+	help
+	  Enable the feature of data ciphering/unciphering in the tool mkimage
+	  and in the u-boot support of the FIT image.
+
 config SPL_FIT
 	bool "Support Flattened Image Tree within SPL"
 	depends on SPL && FIT
