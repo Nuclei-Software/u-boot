@@ -19,3 +19,8 @@ int dram_init_banksize(void)
 {
 	return fdtdec_setup_memory_banksize();
 }
+
+phys_addr_t board_get_usable_ram_top(phys_addr_t total_size)
+{
+	return gd->ram_top;
+}
