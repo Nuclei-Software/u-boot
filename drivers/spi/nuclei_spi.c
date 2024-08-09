@@ -466,7 +466,7 @@ static void nuclei_spi_init_hw(struct nuclei_spi *spi)
 
 	if ((spi->feature & NUCLEI_SPI_FEATURE_32B_DATA) == NUCLEI_SPI_FEATURE_32B_DATA) {
 		/* Set spi cr reg: master mode, uDMA disabled, ddr disabled, cs output enable, hdsmode disabled */
-		writel(0x11, spi->regs + NUCLEI_SPI_REG_CR);
+		writel(BIT(0)| BIT(3) | BIT(4)| BIT(13), spi->regs + NUCLEI_SPI_REG_CR);
 		/* Set FORCE register to 0x1, force enable, write protect disable */
 		writel(0x1, spi->regs + NUCLEI_SPI_REG_FORCE);
 	}
@@ -481,7 +481,7 @@ static void nuclei_spi_init_hw(struct nuclei_spi *spi)
 	/* Set CS/SCK Delays and Inactive Time to defaults */
 	writel(NUCLEI_SPI_DELAY0_CSSCK(1) | NUCLEI_SPI_DELAY0_SCKCS(1),
 	       spi->regs + NUCLEI_SPI_REG_DELAY0);
-	writel(NUCLEI_SPI_DELAY1_INTERCS(1) | NUCLEI_SPI_DELAY1_INTERXFR(0),
+	writel(NUCLEI_SPI_DELAY1_INTERCS(3) | NUCLEI_SPI_DELAY1_INTERXFR(0),
 	       spi->regs + NUCLEI_SPI_REG_DELAY1);
 
 	/* Exit specialized memory-mapped SPI flash mode */
@@ -493,6 +493,7 @@ static int nuclei_spi_probe(struct udevice *bus)
 	struct nuclei_spi *spi = dev_get_priv(bus);
 	struct clk clkdev;
 	int ret;
+	u32 clock = 0;
 
 	spi->regs = (void *)(ulong)dev_remap_addr(bus);
 	if (!spi->regs)
@@ -507,10 +508,18 @@ static int nuclei_spi_probe(struct udevice *bus)
 						  NUCLEI_SPI_DEFAULT_BITS);
 
 	ret = clk_get_by_index(bus, 0, &clkdev);
-	if (ret)
-		return ret;
-	spi->freq = clk_get_rate(&clkdev);
-
+	if (IS_ERR_VALUE(ret)) {
+		ret = dev_read_u32(bus, "clock-frequency", &clock);
+		if (IS_ERR_VALUE(ret)) {
+			return ret;
+		}
+	} else {
+		clock = clk_get_rate(&clkdev);
+		if (IS_ERR_VALUE(clock)) {
+			return ret;
+		}
+	}
+	spi->freq = clock;
     /* probe nuclei spi features */
     nuclei_spi_prope_feature(spi);
 	/* init the nuclei spi hw */
