@@ -820,6 +820,13 @@ config MMC_MTK
 	  This is needed if support for any SD/SDIO/MMC devices is required.
 	  If unsure, say N.
 
+config MMC_NUCLEI
+	bool "Nuclei SDHCI controller"
+	depends on BLK && DM_MMC
+	help
+	  Enables support for SDHCI 2.0 controller present on Nuclei Platform.
+	  Card-detect gpios are not supported.
+
 endif
 
 config FSL_SDHC_V2_3
