@@ -7,7 +7,7 @@ config SYS_VENDOR
 	default "nuclei"
 
 config SYS_CPU
-	default "generic"
+	default "nuclei"
 
 config SYS_CONFIG_NAME
 	default "nuclei-generic"
