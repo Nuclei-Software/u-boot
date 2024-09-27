@@ -22,5 +22,6 @@ int spl_soc_init(void)
 void harts_early_init(void)
 {
 	soc_clk_init();
-	ddr_init();
+	if (ddr_init())
+		asm volatile("j . ");
 }

@@ -17,6 +17,8 @@
 #include <linux/delay.h>
 #include <wait_bit.h>
 #include <dm.h>
+#include <linux/dma-mapping.h>
+
 DECLARE_GLOBAL_DATA_PTR;
 
 /* Registers */
@@ -41,12 +43,29 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SDIO_CMD_POWERUP_CNT		0x54
 #define SDIO_TX_DATA				0x60
 #define SDIO_RX_DATA				0x64
-#define	SDIO_TX_MARK				0x68
-#define	SDIO_RX_MARK				0x6C
+#define SDIO_TX_MARK				0x68
+#define SDIO_RX_MARK				0x6C
 #define SDIO_IP						0x70
 #define SDIO_IE						0x74
 #define SDIO_SAMPLE_DDR				0x78
 #define SDIO_CRC_VALUE				0x8C
+#define SDIO_DMA_INTR_EN			0x1C00
+#define SDIO_DMA_INTR_STAT			0x1C04
+#define SDIO_DMA_INTR_CLR			0x1C08
+
+
+#define SDIO_DMA_INT_EN_RX_FTRANS	BIT(0)
+#define SDIO_DMA_INT_EN_TX_FTRANS	BIT(3)
+#define SDIO_DMA_INT_STAT_RX_FTRANS	BIT(0)
+#define SDIO_DMA_INT_STAT_TX_FTRANS	BIT(3)
+#define SDIO_DMA_INT_CLR_RX_FTRANS	BIT(0)
+#define SDIO_DMA_INT_CLR_TX_FTRANS	BIT(3)
+
+
+#define SDIO_DMA_TX_RX_EN			BIT(4)
+#define SDIO_DMA_DATASIZE_MASK		GENMASK(2,1)
+#define SDIO_DMA_DATASIZE_WORD		(2<<1)
+#define SDIO_DMA_DATASIZE_HALFWORD	(1<<1)
 
 #define SDIO_CR_DMA_EN				BIT(0)
 #define SDIO_CR_DDR_EN				BIT(1)
@@ -61,24 +80,26 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SDIO_STATUS_CMDERR_WrongDir	BIT(17)
 #define SDIO_STATUS_CMDERR_BUSY_TO	BIT(18)
 #define SDIO_STATUS_CMDERR_CRC		BIT(19)
+#define SDIO_STATUS_DATAERR			GENMASK(29, 24)
 
-#define SDIO_CMD_OP_CRC_EN 			BIT(2)
-#define SDIO_CMD_OP_POWER_EN	 	BIT(4)
-#define SDIO_CMD_OP_CRC_CHECK_EN 	BIT(5)
+#define SDIO_CMD_OP_CRC_EN			BIT(2)
+#define SDIO_CMD_OP_POWER_EN		BIT(4)
+#define SDIO_CMD_OP_CRC_CHECK_EN	BIT(5)
 #define SDIO_DATA_SETUP_EN			BIT(0)
 #define SDIO_DATA_SETUP_RD			BIT(1)
 #define SDIO_DATA_SETUP_MODE		GENMASK(3,2)
 #define SDIO_DATA_SETUP_BLK_NUM		GENMASK(19, 4)
 #define SDIO_DATA_SETUP_BLK_SIZE	GENMASK(31, 20)
 
-#define NUCLEI_MMC_MAX_TIMEOUT		0x10000
+/*poll mode max timeout 1000 is work well */
+#define NUCLEI_MMC_MAX_TIMEOUT		1000
 
-#define NUCLEI_MISC_BASE            0xf8b300000
+#define NUCLEI_MISC_BASE			0xf8b300000
 #define NUCLEI_IOMUX_BASE			0xf8bc00000
 
 #define NUCLEI_MMC_INPUT_CLK		100000000
 
-
+#define CONFIG_NUCLEI_MMC_PIO
 
 struct nuclei_mmc_plat {
 	struct mmc_config cfg;
@@ -93,6 +114,12 @@ struct nuclei_mmc_priv {
 #define NUCLEI_MMC_BUS_WIDTH_1		0x0
 #define NUCLEI_MMC_BUS_WIDTH_4		0x1
 #define NUCLEI_MMC_BUS_WIDTH_8		0x2
+/* Because hardware limit tranfersize to 1M,
+ * so each segment maxlen fixed to 1Mb-512b
+ * dma_segment_num indicate dma transfer times.
+ */
+	int			dma_cmdarg;
+	int			dma_remain_blocks;
 };
 
 static int nuclei_mmc_config_clock(struct nuclei_mmc_priv *priv, struct mmc *mmc)
@@ -104,7 +131,7 @@ static int nuclei_mmc_config_clock(struct nuclei_mmc_priv *priv, struct mmc *mmc
 		clk_div++;
 	if (clk_div < 2)
 		return -EINVAL;
-	
+	printf("clk_div:%x\n", clk_div);
 	writel((clk_div >> 1) - 1, priv->regs + SDIO_CLK_DIV);
 
 	return 0;
@@ -114,15 +141,16 @@ static int nuclei_mmc_wait_for_completion(struct nuclei_mmc_priv *priv)
 {
 	int i;
 	u32 stat;
-	
+
 	/* wait for completion */
-	for (i = 0; i < 0x1000; i++) {
+	for (i = 0; i < NUCLEI_MMC_MAX_TIMEOUT; i++) {
 		stat = readl(priv->regs + SDIO_STATUS);
 		if (stat & SDIO_STATUS_EOT) {
 			break;
 		}
 		udelay(100);
 	}
+
 	/* check err */
 	if (stat & SDIO_STATUS_CMDERR_RSP_TO){
 		printf("%s resp timeout\n", __func__);
@@ -140,13 +168,48 @@ static int nuclei_mmc_wait_for_completion(struct nuclei_mmc_priv *priv)
 		printf("%s dirction err\n", __func__);
 		return -ECOMM;
 	}
+	if (stat & SDIO_STATUS_DATAERR) {
+		printf("%s data transfer err:%x\n", __func__, stat);
+		return -ECOMM;
+	}
+	if (stat & GENMASK(5, 1)) printf("trans err:%x\n", stat);
 	/* clear stat */
 	writel(stat, priv->regs + SDIO_STATUS);
-	
+
 	return 0;
 }
 
-static int nuclei_mmc_transfer_data(struct nuclei_mmc_priv *priv, struct mmc_data *data)
+void dump_data(char *buf, int len)
+{
+#ifdef DUMP_DATA
+	int i;
+
+	printf("\n==>dumping buf %x, len:%x\n", buf, len);
+	for(i = 0; i < len; i++) {
+		printf("%02x ", buf[i]);
+		if ((i+1)%16 ==0)
+			printf("\n");
+	}
+#endif
+}
+
+#if defined(CONFIG_NUCLEI_MMC_PIO)
+static int nuclei_mmc_setup_pio(struct nuclei_mmc_priv *priv, struct mmc_data *data)
+{
+	u32 val = 0;
+
+	/* setup data */
+	val = SDIO_DATA_SETUP_EN;
+	if (data->flags & MMC_DATA_READ)
+		val |= SDIO_DATA_SETUP_RD;
+	val |= (priv->flags & NUCLEI_MMC_BUS_WIDTH_MASK) << 2;
+	val |= ((data->blocks-1) << 4) & SDIO_DATA_SETUP_BLK_NUM;
+	val |= ((data->blocksize-1) << 20) & SDIO_DATA_SETUP_BLK_SIZE;
+	//printf("data_setup:0x%x\n", val);
+	writel(val, priv->regs + SDIO_DATA_SETUP);
+}
+
+static int nuclei_mmc_wait_pio(struct nuclei_mmc_priv *priv, struct mmc_data *data)
 {
 	int sz = data->blocks * data->blocksize;
 	uint32_t *buf;
@@ -155,31 +218,191 @@ static int nuclei_mmc_transfer_data(struct nuclei_mmc_priv *priv, struct mmc_dat
 
 	if (data->flags & MMC_DATA_READ){
 		buf = data->dest;
-	    while (sz > 0 && --timeout > 0) {
-	        reg = readl(priv->regs + SDIO_IP);
-	        if (!(reg & SDIO_RXFIFO_EMPTY)) {
-	            *buf++ = readl(priv->regs + SDIO_RX_DATA);
-	            sz -= 4;
-	            timeout = NUCLEI_MMC_MAX_TIMEOUT;
-	        } else
-	            udelay(100);
-	    }
-	} else if (data->flags & MMC_DATA_WRITE) {
+		while (sz > 0 && --timeout > 0) {
+			reg = readl(priv->regs + SDIO_IP);
+			if (!(reg & SDIO_RXFIFO_EMPTY)) {
+				*buf++ = readl(priv->regs + SDIO_RX_DATA);
+				sz -= 4;
+				timeout = NUCLEI_MMC_MAX_TIMEOUT;
+			} else
+				udelay(100);
+		}
+	}
+	else if (data->flags & MMC_DATA_WRITE) {
 		buf = data->src;
-	    while (sz > 0 && --timeout > 0) {
-	        reg = readl(priv->regs + SDIO_IP);
-	        if (!(reg & SDIO_TXFIFO_FULL)) {
-	            writel(*buf++, priv->regs + SDIO_TX_DATA);
-	            sz -= 4;
-	            timeout = NUCLEI_MMC_MAX_TIMEOUT;
-	        } else
-	            udelay(100);
-	    }		
+		while (sz > 0 && --timeout > 0) {
+			reg = readl(priv->regs + SDIO_IP);
+			if (!(reg & SDIO_TXFIFO_FULL)) {
+				writel(*buf++, priv->regs + SDIO_TX_DATA);
+				sz -= 4;
+				timeout = NUCLEI_MMC_MAX_TIMEOUT;
+			} else
+				udelay(100);
+		}
 	}
 	if (timeout == 0)
 		return -ECOMM;
+	dump_data(data->dest, data->blocks * data->blocksize);
 	return nuclei_mmc_wait_for_completion(priv);
 }
+#else
+void dump_reg(struct nuclei_mmc_priv *priv)
+{
+#ifdef DUMP_REG
+	printf("rx_addr:%x,rx_size:%x,cr:%x,cfg:%x\n",
+		readl(priv->regs + SDIO_RX_SADDR),
+		readl(priv->regs + SDIO_RX_SIZE),
+		readl(priv->regs + SDIO_CR),
+		readl(priv->regs + SDIO_RX_CFG));
+	printf("cmd_op:%x,cmdargs:%x, datasetup:%x\n",
+		readl(priv->regs + SDIO_CMD_OP),
+		readl(priv->regs + SDIO_CMD_ARG),
+		readl(priv->regs + SDIO_DATA_SETUP));
+#endif
+}
+
+//#define NUCLEI_SDIO_DMA_MAXLEN		(0x100000-0x8000)
+//#define NUCLEI_SDIO_DMA_MAXBLOCKS		1984
+#define NUCLEI_SDIO_DMA_MAXLEN			0x80000
+#define NUCLEI_SDIO_DMA_MAXBLOCKS		1024
+//#define NUCLEI_SDIO_DMA_MAXLEN		0x10000
+//#define NUCLEI_SDIO_DMA_MAXBLOCKS		128
+//#define NUCLEI_SDIO_DMA_MAXLEN		0x8000
+//#define NUCLEI_SDIO_DMA_MAXBLOCKS		64
+
+static int nuclei_mmc_setup_dma(struct nuclei_mmc_priv *priv, struct mmc_data *data)
+{
+	int sz = data->blocks * data->blocksize;
+	uint8_t *buf;
+	uint32_t reg;
+	dma_addr_t dma_addr;
+	uint32_t val;
+
+	/* setup data */
+	val = SDIO_DATA_SETUP_EN;
+	if (data->flags & MMC_DATA_READ)
+		val |= SDIO_DATA_SETUP_RD;
+
+	val |= (priv->flags & NUCLEI_MMC_BUS_WIDTH_MASK) << 2;
+	if (sz > NUCLEI_SDIO_DMA_MAXLEN) {
+		val |= ((NUCLEI_SDIO_DMA_MAXBLOCKS-1) << 4) & SDIO_DATA_SETUP_BLK_NUM;
+	} else {
+		val |= ((data->blocks-1) << 4) & SDIO_DATA_SETUP_BLK_NUM;
+	}
+
+	val |= ((data->blocksize-1) << 20) & SDIO_DATA_SETUP_BLK_SIZE;
+	writel(val, priv->regs + SDIO_DATA_SETUP);
+
+	/* save blocks number */
+	priv->dma_remain_blocks = data->blocks;
+
+	/* Enable DMA Mode*/
+	reg = readl(priv->regs + SDIO_CR);
+	reg |= SDIO_CR_DMA_EN;
+	writel(reg, priv->regs + SDIO_CR);
+
+	//printf("len:0x%x,ds:0x%x\n",sz, val);
+	if (data->flags & MMC_DATA_READ){
+		buf = data->dest;
+		dma_addr = dma_map_single(buf, sz, DMA_FROM_DEVICE);
+
+		/* Config RX DMA */
+		writel(dma_addr, priv->regs + SDIO_RX_SADDR);
+		writel((sz > NUCLEI_SDIO_DMA_MAXLEN) ? NUCLEI_SDIO_DMA_MAXLEN : sz,
+			priv->regs + SDIO_RX_SIZE);
+
+		/* Start RX DMA */
+		reg = readl(priv->regs + SDIO_RX_CFG);
+		reg &= ~SDIO_DMA_DATASIZE_MASK;
+		reg |= SDIO_DMA_DATASIZE_WORD | SDIO_DMA_TX_RX_EN;
+		writel(reg, priv->regs + SDIO_RX_CFG);
+	} else if (data->flags & MMC_DATA_WRITE) {
+
+	}
+}
+
+static int nuclei_mmc_wait_dma(struct nuclei_mmc_priv *priv, struct mmc_data *data)
+{
+	uint32_t reg;
+	uint8_t *buf;
+	uint32_t sz = data->blocks * data->blocksize;
+	uint32_t val;
+
+	if (data->flags & MMC_DATA_READ){
+		buf = data->dest;
+check_finished:
+		while(!(readl(priv->regs + SDIO_DMA_INTR_STAT) & SDIO_DMA_INT_STAT_RX_FTRANS));
+		writel(SDIO_DMA_INT_CLR_RX_FTRANS, priv->regs + SDIO_DMA_INTR_CLR);
+		dump_data(buf, (sz > NUCLEI_SDIO_DMA_MAXLEN) ? NUCLEI_SDIO_DMA_MAXLEN : sz);
+		if (sz > NUCLEI_SDIO_DMA_MAXLEN) {
+		/* send cmd12 */
+			{
+				//printf("cmd12\n");
+				reg = readl(priv->regs + SDIO_CMD_OP);
+				val = MMC_CMD_STOP_TRANSMISSION << 8;
+				val |= MMC_RSP_R1b & 0xf;
+				writel(val, priv->regs + SDIO_CMD_OP);
+				writel(0, priv->regs + SDIO_CMD_ARG);
+				writel(0, priv->regs + SDIO_DATA_SETUP);
+				writel(1, priv->regs + SDIO_START);
+				nuclei_mmc_wait_for_completion(priv);
+				//printf("sta:%x\n", readl(priv->regs + SDIO_STATUS));
+				writel(reg, priv->regs + SDIO_CMD_OP);
+			}
+
+			sz -= NUCLEI_SDIO_DMA_MAXLEN;
+			priv->dma_remain_blocks -= NUCLEI_SDIO_DMA_MAXBLOCKS;
+
+			val = SDIO_DATA_SETUP_EN;
+			if (data->flags & MMC_DATA_READ)
+				val |= SDIO_DATA_SETUP_RD;
+
+			val |= (priv->flags & NUCLEI_MMC_BUS_WIDTH_MASK) << 2;
+			if (sz > NUCLEI_SDIO_DMA_MAXLEN)
+				val |= ((NUCLEI_SDIO_DMA_MAXBLOCKS - 1) << 4) & SDIO_DATA_SETUP_BLK_NUM;
+			else
+				val |= ((priv->dma_remain_blocks - 1) << 4) & SDIO_DATA_SETUP_BLK_NUM;
+
+			val |= ((data->blocksize-1) << 20) & SDIO_DATA_SETUP_BLK_SIZE;
+			writel(val, priv->regs + SDIO_DATA_SETUP);
+
+			buf += NUCLEI_SDIO_DMA_MAXLEN;
+			/* Config RX DMA */
+			writel(buf, priv->regs + SDIO_RX_SADDR);
+
+			writel((sz > NUCLEI_SDIO_DMA_MAXLEN) ? NUCLEI_SDIO_DMA_MAXLEN : sz,
+				priv->regs + SDIO_RX_SIZE);
+
+			/* Start RX DMA */
+			reg = readl(priv->regs + SDIO_RX_CFG);
+			reg &= ~SDIO_DMA_DATASIZE_MASK;
+			reg |= SDIO_DMA_DATASIZE_WORD | SDIO_DMA_TX_RX_EN;
+			writel(reg, priv->regs + SDIO_RX_CFG);
+
+			/* update block position */
+			writel(priv->dma_cmdarg + NUCLEI_SDIO_DMA_MAXBLOCKS, priv->regs + SDIO_CMD_ARG);
+			priv->dma_cmdarg += NUCLEI_SDIO_DMA_MAXBLOCKS;
+			dump_reg(priv);
+			/* start transmission */
+			writel(1, priv->regs + SDIO_START);
+
+			nuclei_mmc_wait_for_completion(priv);
+			goto check_finished;
+		} else {
+			/* Disable DMA */
+			reg = readl(priv->regs + SDIO_CR);
+			reg &= ~SDIO_CR_DMA_EN;
+			writel(reg, priv->regs + SDIO_CR);
+
+			writel(0, priv->regs + SDIO_DATA_SETUP);
+		}
+	} else if (data->flags & MMC_DATA_WRITE) {
+
+	}
+
+	return 0;
+}
+#endif
 
 static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 			   struct mmc_cmd *cmd, struct mmc_data *data)
@@ -187,7 +410,7 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 	u32 stat, mask, cmdat = 0;
 	int i, ret=0;
 	ulong start = get_timer(0);
-	ulong timeout = 5000;
+	ulong timeout = 50000;
 	u32 val = 0;
 
 	while (readl(priv->regs + SDIO_STATUS) & SDIO_STATUS_BUSY) {
@@ -202,21 +425,25 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 	val |= cmd->resp_type & 0xf;
 	writel(val, priv->regs + SDIO_CMD_OP);
 	writel(cmd->cmdarg, priv->regs + SDIO_CMD_ARG);
-
+	//printf("cmd op:%x,args:%x\n", val, cmd->cmdarg);
 	if (data) {
-		/* setup data */
-		val = SDIO_DATA_SETUP_EN;
-		if (data->flags & MMC_DATA_READ)
-			val |= SDIO_DATA_SETUP_RD;
-		val |= (priv->flags & NUCLEI_MMC_BUS_WIDTH_MASK) << 2;
-		val |= ((data->blocks-1) << 4) & SDIO_DATA_SETUP_BLK_NUM;
-		val |= ((data->blocksize-1) << 20) & SDIO_DATA_SETUP_BLK_SIZE;
-		writel(val, priv->regs + SDIO_DATA_SETUP);
+#if defined(CONFIG_NUCLEI_MMC_PIO)
+		nuclei_mmc_setup_pio(priv, data);
+#else
+		priv->dma_cmdarg = cmd->cmdarg;
+		nuclei_mmc_setup_dma(priv, data);
+		dump_reg(priv);
+#endif
 	} else {
-		val = 0;
+		writel(0, priv->regs + SDIO_DATA_SETUP);
+#if !defined(CONFIG_NUCLEI_MMC_PIO)
+		/* Disable DMA Mode*/
+		val = readl(priv->regs + SDIO_CR);
+		val &= ~SDIO_CR_DMA_EN;
+		writel(val, priv->regs + SDIO_CR);
+#endif
 	}
-	/* write the data setup */
-	writel(val, priv->regs + SDIO_DATA_SETUP);
+
 	/* start transmission */
 	writel(1, priv->regs + SDIO_START);
 
@@ -225,7 +452,7 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 		printf("%s: transmission err\n", __func__);
 		return ret;
 	}
-	
+
 	if (cmd->resp_type & MMC_RSP_PRESENT) {
 		/* read the response */
 		if (cmd->resp_type & MMC_RSP_136) {
@@ -235,11 +462,15 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 			cmd->response[3] = readl(priv->regs + SDIO_RSP0);
 		} else {
 			cmd->response[0] = readl(priv->regs + SDIO_RSP0);
-			cmd->response[1] = readl(priv->regs + SDIO_RSP1) & 0x3f;
 		}
 	}
+
 	if (data) 
-		ret = nuclei_mmc_transfer_data(priv, data);
+#if defined(CONFIG_NUCLEI_MMC_PIO)
+		ret = nuclei_mmc_wait_pio(priv, data);
+#else
+		ret = nuclei_mmc_wait_dma(priv, data);
+#endif
 
 	return ret;
 }
@@ -247,7 +478,7 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 static int nuclei_mmc_set_ios(struct mmc *mmc, struct nuclei_mmc_priv *priv)
 {
 	u32 val;
-	
+
 	/* change clock */
 	if (mmc->clock && nuclei_mmc_config_clock(priv, mmc) != 0)
 		return -EINVAL;
@@ -258,7 +489,7 @@ static int nuclei_mmc_set_ios(struct mmc *mmc, struct nuclei_mmc_priv *priv)
 	if (mmc->ddr_mode)
 		val |= SDIO_CR_DDR_EN;
 	writel(val, priv->regs + SDIO_CR);
-	
+
 	/* set the bus width for the next command */
 	priv->flags &= ~NUCLEI_MMC_BUS_WIDTH_MASK;
 	if (mmc->bus_width == 8)
@@ -285,7 +516,7 @@ static void nuclei_mmc_config_iomux(void)
 	val = __raw_readl(NUCLEI_IOMUX_BASE + 0x10000 + 0x4 * 21);
 	val |= 32 | 8;
 	__raw_writel(val, NUCLEI_IOMUX_BASE + 0x10000 + 0x4 * 21);
-	
+
 	/* config sdio data0 */
 	__raw_writel(1, NUCLEI_IOMUX_BASE + 0x4000 + 0x4 * 22);
 	val = __raw_readl(NUCLEI_IOMUX_BASE + 0x10000 + 0x4 * 22);
@@ -319,7 +550,13 @@ static int nuclei_mmc_core_init(struct mmc *mmc)
 	ret = readl(NUCLEI_MISC_BASE + 0x20);
 	ret &= ~(1<<8);
 	writel(ret, NUCLEI_MISC_BASE + 0x20);
-	ret |= 1<<8;
+	ret |= 1<<8 ;
+	writel(ret, NUCLEI_MISC_BASE + 0x20);
+
+	ret = readl(NUCLEI_MISC_BASE + 0x20);
+	ret &= ~(1<<9);
+	writel(ret, NUCLEI_MISC_BASE + 0x20);
+	ret |= 1<<9 ;
 	writel(ret, NUCLEI_MISC_BASE + 0x20);
 
 	/* disable interrupt */
@@ -327,6 +564,13 @@ static int nuclei_mmc_core_init(struct mmc *mmc)
 
 	/* Maximum timeouts */
 	writel(0xffffffff, priv->regs + SDIO_DATA_TIMEOUT_CNT);
+
+#if !defined(CONFIG_NUCLEI_MMC_PIO)
+	writel(SDIO_DMA_INT_EN_RX_FTRANS, priv->regs + SDIO_DMA_INTR_EN);
+	//ret = readl(priv->regs + SDIO_CR);
+	//ret &= ~BIT(5);
+	//writel(ret, priv->regs + SDIO_CR);
+#endif
 
 	/* config sdio iomux */
 	nuclei_mmc_config_iomux();

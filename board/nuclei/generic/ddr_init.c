@@ -145,7 +145,7 @@ int32_t ddr_init(void)
         ie_tmg = 0xc0;
         rd_tsel_tmg = 0x72;
     }
-    uint32_t phymstr_en = 1;
+    uint32_t phymstr_en = 0;
     uint32_t phymstr_intrvl = 0x12; // PHY cnt has bug, cannot be larger than 0x12
     uint32_t fc_retrain_en = 0;
     uint32_t phyupd_en = 0;

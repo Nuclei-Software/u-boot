@@ -14,9 +14,12 @@
 #define  PLL_CTRL4_SYS_CLK_PLL_BK_OFS       0x88UL 
 
 
+#define  PLL_MUL_300MHZ                     ((5<<0)|(94<<8)|(0<<18))
+#define  PLL_MUL_384MHZ                     ((5<<0)|(240<<8)|(1<<18))
 #define  PLL_MUL_400MHZ                     ((4<<0)|(200<<8)|(1<<18))
 #define  PLL_MUL_800MHZ                     ((3<<0)|(150<<8)|(0<<18))
 #define  PLL_MUL_1200MHZ                    ((2<<0)|(150<<8)|(0<<18))
+#define  PLL_MUL_1600MHZ                    ((2<<0)|(200<<8)|(0<<18))
 
 #define  SOC_MISC_BASE                      0xf8b300000
 
@@ -400,16 +403,27 @@ uint32_t ddr_top0_ddr_dfs_req(void)
     return REG32(SOC_MISC_BASE + 0xc88) & BIT(3);
 }
 
+uint32_t ddr_top0_ddr_dfs_freq(void)
+{
+    return ((REG32(SOC_MISC_BASE + 0xc88) & GENMASK(2,1)) >> 1);
+}
+
+void ddr_top0_ddr_dfs_ack_pulse(void)
+{
+    REG32(SOC_MISC_BASE + 0xc88) |= (1<<4);
+    REG32(SOC_MISC_BASE + 0xc88) &= ~(1<<4);
+}
+
 void ddr_top0_clk_mux_sel(uint32_t src_sel)
 {
     REG32(SOC_MISC_BASE+0x174) &= ~(GENMASK(17, 16));
     REG32(SOC_MISC_BASE+0x174) = src_sel<<16;
-	for (volatile int i=0; i<100; i++);
+    for (volatile int i=0; i<100; i++);
 }
 
 void ddr_top0_clk_en(ControlStatus Status)
 {
-    misc_clk_cfg1(0xf8b300000,0x40,16,Status);
+    misc_clk_cfg1(SOC_MISC_BASE,0x40,16,Status);
 }
 
 #if 0
@@ -431,7 +445,10 @@ void soc_clk_init(void)
     sdio0_data_clk_div(3);
     //usart0_clk_div(1);
     clock_pll_cfg(SYS_CLK_PLL, SYS_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_400MHZ);
+    //clock_pll_cfg(SYS_CLK_PLL, SYS_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_384MHZ);
+    //clock_pll_cfg(XDC_CLK_PLL_BK, XDC_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_1600MHZ);
     clock_pll_cfg(XDC_CLK_PLL_BK, XDC_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_1200MHZ);
+    //clock_pll_cfg(XDC_CLK_PLL_BK, XDC_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_800MHZ);
     cpu_clk_i_mux_sel(CPU_CLK_I_MUX_SEL_SYS_CLK_PLL);
     ddr_fab_clk_mux_sel(DDR_FAB_CLK_MUX_SEL_SYS_CLK_PLL);
     sdio_clk_mux_sel(DDR_FAB_CLK_MUX_SEL_SYS_CLK_PLL);
