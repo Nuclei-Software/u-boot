@@ -218,25 +218,26 @@ static int nuclei_mmc_wait_pio(struct nuclei_mmc_priv *priv, struct mmc_data *da
 
 	if (data->flags & MMC_DATA_READ){
 		buf = data->dest;
-		while (sz > 0 && --timeout > 0) {
+		while (sz > 0 && timeout > 0) {
 			reg = readl(priv->regs + SDIO_IP);
 			if (!(reg & SDIO_RXFIFO_EMPTY)) {
 				*buf++ = readl(priv->regs + SDIO_RX_DATA);
 				sz -= 4;
-				timeout = NUCLEI_MMC_MAX_TIMEOUT;
-			} else
+			} else {
+				timeout--;
 				udelay(100);
+			}
 		}
 	}
 	else if (data->flags & MMC_DATA_WRITE) {
 		buf = data->src;
-		while (sz > 0 && --timeout > 0) {
+		while (sz > 0 && timeout > 0) {
 			reg = readl(priv->regs + SDIO_IP);
 			if (!(reg & SDIO_TXFIFO_FULL)) {
 				writel(*buf++, priv->regs + SDIO_TX_DATA);
 				sz -= 4;
-				timeout = NUCLEI_MMC_MAX_TIMEOUT;
 			} else
+				timeout--;
 				udelay(100);
 		}
 	}
