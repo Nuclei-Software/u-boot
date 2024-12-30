@@ -24,8 +24,12 @@ struct cipher_algo cipher_algos[] = {
 #if IMAGE_ENABLE_ENCRYPT
 		.calculate_type = EVP_aes_128_cbc,
 #endif
+#ifndef USE_HOSTCC
+		.decrypt = image_aes_decrypt_hw,
+#else
 		.encrypt = image_aes_encrypt,
 		.decrypt = image_aes_decrypt,
+#endif
 		.add_cipher_data = image_aes_add_cipher_data
 	},
 	{
@@ -46,8 +50,12 @@ struct cipher_algo cipher_algos[] = {
 #if IMAGE_ENABLE_ENCRYPT
 		.calculate_type = EVP_aes_256_cbc,
 #endif
+#ifndef USE_HOSTCC
+		.decrypt = image_aes_decrypt_hw,
+#else
 		.encrypt = image_aes_encrypt,
 		.decrypt = image_aes_decrypt,
+#endif
 		.add_cipher_data = image_aes_add_cipher_data
 	}
 };

@@ -7,7 +7,7 @@ config SYS_VENDOR
 	default "nuclei"
 
 config SYS_CPU
-	default "generic"
+	default "nuclei"
 
 config SYS_CONFIG_NAME
 	default "nuclei-generic"
@@ -18,10 +18,10 @@ config TEXT_BASE
 	default 0xA0200000 if RISCV_SMODE
 
 config SPL_TEXT_BASE
-	default 0x40000400
+	default 0x80000000
 
 config SPL_OPENSBI_LOAD_ADDR
-	default 0x80000000
+	default 0xc0000000
 
 config BOARD_SPECIFIC_OPTIONS # dummy
 	def_bool y

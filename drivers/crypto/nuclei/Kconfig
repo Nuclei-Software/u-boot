@@ -1,0 +1,28 @@
+config NUCLEI_HSM_AES
+	bool "Enable Nuclei HSM AES HW accelerator"
+	default n
+	select NUCLEI_HSM_MAILBOX
+	help
+	  This option enables support of Nuclei HSM HW SHA accelerator.
+	  It supports SHA1 and SHA256 hashing algorithms.
+
+config NUCLEI_HSM_SHA
+	bool "Enable Nuclei HSM SHA HW accelerator"
+	default n
+	select NUCLEI_HSM_MAILBOX
+	help
+	  This option enables support of Nuclei HSM HW SHA accelerator.
+	  It supports SHA1 and SHA256 hashing algorithms.
+
+config NUCLEI_HSM_RSA
+	bool "Enable Nuclei HSM RSA HW accelerator"
+	default n
+	select NUCLEI_HSM_MAILBOX
+	help
+	  This option enables support of Nuclei HSM HW RSA accelerator.
+
+config NUCLEI_HSM_MAILBOX
+	bool "Support Nuclei HSM MAILBOX"
+	default n
+	help
+	  This option enables support of Nuclei HSM Mailbox.

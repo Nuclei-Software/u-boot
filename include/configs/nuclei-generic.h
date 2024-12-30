@@ -23,12 +23,12 @@
 	"fdt_high=0xffffffffffffffff\0" \
 	"initrd_high=0xffffffffffffffff\0" \
 	"mmcdev=0x0\0" \
-	"fit_addr= 0x83000000\0"  \
+	"fit_addr= 0xc3000000\0"  \
 	"mmcloadfit=fatload mmc ${mmcdev} ${fit_addr} kernel.itb\0" \
-	"mmcboot_fit= echo Trying load from mmc..; run mmcloadfit; bootm ${fit_addr}:kernel ${fit_addr}:ramdisk 0x88000000 \0" \
+	"mmcboot_fit= echo Trying load from mmc..; run mmcloadfit; bootm ${fit_addr}:kernel ${fit_addr}:ramdisk 0xc8000000 \0" \
 	"flash_kernel_offset=0x20100000\0" \
 	"flash_kernel_size=0xC00000\0" \
-	"flashboot_fit= echo Trying load from xipflash..; cp.b ${flash_kernel_offset} ${fit_addr} ${flash_kernel_size}; bootm ${fit_addr}:kernel ${fit_addr}:ramdisk 0x88000000 \0" \
+	"flashboot_fit= echo Trying load from xipflash..; cp.b ${flash_kernel_offset} ${fit_addr} ${flash_kernel_size}; bootm ${fit_addr}:kernel ${fit_addr}:ramdisk 0xc8000000 \0" \
 	BOOTENV
 
 #define CONFIG_PREBOOT \

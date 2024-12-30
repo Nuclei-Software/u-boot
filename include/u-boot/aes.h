@@ -34,6 +34,10 @@ int image_aes_add_cipher_data(struct image_cipher_info *info, void *keydest,
 int image_aes_decrypt(struct image_cipher_info *info,
 		      const void *cipher, size_t cipher_len,
 		      void **data, size_t *size);
+
+int image_aes_decrypt_hw(struct image_cipher_info *info,
+		      const void *cipher, size_t cipher_len,
+		      void **data, size_t *size);
 #else
 int image_aes_decrypt(struct image_cipher_info *info,
 		      const void *cipher, size_t cipher_len,

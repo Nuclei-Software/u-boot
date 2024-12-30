@@ -2,7 +2,8 @@ config RSA
 	bool "Use RSA Library"
 	select RSA_FREESCALE_EXP if FSL_CAAM && !ARCH_MX7 && !ARCH_MX7ULP && !ARCH_MX6 && !ARCH_MX5
 	select RSA_ASPEED_EXP if ASPEED_ACRY
-	select RSA_SOFTWARE_EXP if !RSA_FREESCALE_EXP && !RSA_ASPEED_EXP
+	select NUCLEI_HSM_RSA if CONFIG_NUCLEI_RISCV
+	select RSA_SOFTWARE_EXP if !RSA_FREESCALE_EXP && !RSA_ASPEED_EXP && !NUCLEI_HSM_RSA
 	help
 	  RSA support. This enables the RSA algorithm used for FIT image
 	  verification in U-Boot.
@@ -89,5 +90,12 @@ config RSA_ASPEED_EXP
 	help
 	Enables driver for RSA modular exponentiation using ASPEED cryptographic
 	accelerator - ACRY
+
+config NUCLEI_HSM_RSA
+	bool "Enable RSA Modular Exponentiation with NUCLEI crypto accelerator"
+	depends on DM && CONFIG_NUCLEI_RISCV
+	help
+	Enables driver for RSA modular exponentiation using NUCLEI cryptographic
+	accelerator - HSM.
 
 endif

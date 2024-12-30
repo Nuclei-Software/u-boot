@@ -15,6 +15,12 @@ extern char _end[];
 int spl_board_init_f(void)
 {
     // TODO you can init your DDR memory here
+	#define CCM_SUEN	0x7CE
+	#define CCM_SEN		0x2020202
+
+	/* enable ccm ops for smode */
+	csr_write(CCM_SUEN, CCM_SEN);
+
 	return 0;
 }
 
