@@ -21,8 +21,8 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#define UART_TXFIFO_FULL	0x80000000
-#define UART_RXFIFO_EMPTY	0x80000000
+#define UART_TXFIFO_FULL	(1U << 14)
+#define UART_RXFIFO_EMPTY	(1U << 15)
 #define UART_RXFIFO_DATA	0x000000ff
 #define UART_TXCTRL_TXEN	0x1
 #define UART_RXCTRL_RXEN	0x1
@@ -32,6 +32,9 @@ DECLARE_GLOBAL_DATA_PTR;
 
 /* IP register */
 #define UART_IP_RXWM		0x2
+
+#define CFG_STOP_BIT_MASK	(0x3 << 1)
+#define CFG_STOP_BIT_1BIT	(0x1 << 1)
 
 struct uart_nuclei {
 	u32 txfifo;
@@ -81,7 +84,13 @@ static void _nuclei_serial_setbrg(struct uart_nuclei *regs,
 
 static void _nuclei_serial_init(struct uart_nuclei *regs)
 {
-	writel(UART_TXCTRL_TXEN, &regs->txctrl);
+	u32 val;
+
+	val = readl(&regs->txctrl);
+	val &= ~CFG_STOP_BIT_MASK;
+	val |= CFG_STOP_BIT_1BIT | UART_TXCTRL_TXEN;
+	writel(val, &regs->txctrl);
+
 	writel(UART_RXCTRL_RXEN, &regs->rxctrl);
 	writel(UART_SETUP_INITVAL, &regs->setup);
 	writel(0, &regs->ie);
@@ -89,7 +98,7 @@ static void _nuclei_serial_init(struct uart_nuclei *regs)
 
 static int _nuclei_serial_putc(struct uart_nuclei *regs, const char c)
 {
-	if (readl(&regs->txfifo) & UART_TXFIFO_FULL)
+	if (readl(&regs->ip) & UART_TXFIFO_FULL)
 		return -EAGAIN;
 
 	writel(c, &regs->txfifo);
@@ -99,13 +108,12 @@ static int _nuclei_serial_putc(struct uart_nuclei *regs, const char c)
 
 static int _nuclei_serial_getc(struct uart_nuclei *regs)
 {
-	int ch = readl(&regs->rxfifo);
+	int ret = readl(&regs->ip);
 
-	if (ch & UART_RXFIFO_EMPTY)
+	if (ret & UART_RXFIFO_EMPTY)
 		return -EAGAIN;
-	ch &= UART_RXFIFO_DATA;
 
-	return ch;
+	return readl(&regs->rxfifo) & UART_RXFIFO_DATA;
 }
 
 static int nuclei_serial_setbrg(struct udevice *dev, int baudrate)
@@ -205,13 +213,13 @@ static const struct udevice_id nuclei_serial_ids[] = {
 };
 
 U_BOOT_DRIVER(serial_nuclei) = {
-	.name	= "serial_nuclei",
-	.id	= UCLASS_SERIAL,
+	.name = "serial_nuclei",
+	.id = UCLASS_SERIAL,
 	.of_match = nuclei_serial_ids,
 	.of_to_plat = nuclei_serial_of_to_plat,
 	.plat_auto = sizeof(struct nuclei_uart_plat),
 	.probe = nuclei_serial_probe,
-	.ops	= &nuclei_serial_ops,
+	.ops = &nuclei_serial_ops,
 };
 
 #ifdef CONFIG_DEBUG_UART_NUCLEI
