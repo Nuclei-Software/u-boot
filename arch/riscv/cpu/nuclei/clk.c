@@ -6,6 +6,7 @@
 #define  CPU_CLK_I_MUX_SEL_SYS_CLK_PLL      (1UL)
 #define  DDR_FAB_CLK_MUX_SEL_SYS_CLK_PLL    (1UL)
 #define  XDC_CLK_IN_MUX_SEL_OSC_CLK_16M     (0UL)
+#define  XEC_CLK_MUX_SEL_SYS_CLK_PLL        (3UL)
 
 #define  PLL_CTRL0_SYS_CLK_PLL_OFS          0x78UL 
 #define  PLL_CTRL1_XEC_CLK_PLL_OFS          0x7cUL 
@@ -42,36 +43,42 @@ typedef enum {
 
 static void cpu_clk_i_mux_sel(uint32_t src_sel)
 {
-    REG32(SOC_MISC_BASE+0x10c) &= ~(GENMASK(18, 16));
-    REG32(SOC_MISC_BASE+0x10c) = src_sel<<16;
-    for(uint32_t i=0; i<10; i++);
+    REG32(SOC_MISC_BASE + 0x10c) &= ~(GENMASK(18, 16));
+    REG32(SOC_MISC_BASE + 0x10c) = src_sel<<16;
+    for(uint32_t i = 0; i < 10; i++);
 }
 
 static void ddr_fab_clk_mux_sel(uint32_t src_sel)
 {
-    REG32(SOC_MISC_BASE+0x110) &= ~(GENMASK(18, 16));
-    REG32(SOC_MISC_BASE+0x110) = src_sel<<16;
-	for(uint32_t i=0; i<10; i++);
+    REG32(SOC_MISC_BASE + 0x110) &= ~(GENMASK(18, 16));
+    REG32(SOC_MISC_BASE + 0x110) = src_sel<<16;
+	for(uint32_t i = 0; i < 10; i++);
 }
 
 static void sys_clk_in_mux_sel(uint32_t src_sel)
 {
-    REG32(SOC_MISC_BASE+0x100) &= ~(BIT(16));
-    REG32(SOC_MISC_BASE+0x100) = src_sel<<16;
-	for(uint32_t i=0; i<10; i++);
+    REG32(SOC_MISC_BASE + 0x100) &= ~(BIT(16));
+    REG32(SOC_MISC_BASE + 0x100) = src_sel<<16;
+	for(uint32_t i = 0; i < 10; i++);
 }
 
 static void xdc_clk_in_mux_sel(uint32_t src_sel)
 {
-    REG32(0xf8b300000+0x104) &= ~(BIT(16));
-    REG32(0xf8b300000+0x104) = src_sel<<16;
-	for(volatile int i=0; i<1000; i++);
+    REG32(SOC_MISC_BASE + 0x104) &= ~(BIT(16));
+    REG32(SOC_MISC_BASE + 0x104) = src_sel<<16;
+	for(volatile int i = 0; i < 1000; i++);
 }
 
 void sdio_clk_mux_sel(uint32_t src_sel)
 {
-    REG32(0xf8b300000+0x164) &= ~(GENMASK(18, 16));
-    REG32(0xf8b300000+0x164) = src_sel<<16;
+    REG32(SOC_MISC_BASE + 0x164) &= ~(GENMASK(18, 16));
+    REG32(SOC_MISC_BASE + 0x164) = src_sel<<16;
+}
+
+void xec_clk_mux_sel(uint32_t src_sel)
+{
+    REG32(SOC_MISC_BASE + 0x198) &= ~(GENMASK(18,16));
+    REG32(SOC_MISC_BASE + 0x198) = src_sel<<16;
 }
 
 static void sys_clk_pll_cg_on(ControlStatus Status)
@@ -166,12 +173,12 @@ static void pll_ctrl3_xdc_clk_pll_bk_bp(ControlStatus Status)
 
 static uint32_t pll_ctrl3_xdc_clk_pll_bk_lock(void)
 {
-    return REG32(0xf8b300000 + 0x84) & (1<<25);
+    return REG32(SOC_MISC_BASE + 0x84) & (1<<25);
 }
 
 static uint32_t pll_ctrl0_sys_clk_pll_lock(void)
 {
-    return REG32(0xf8b300000 + 0x78) & (1<<25);
+    return REG32(SOC_MISC_BASE + 0x78) & (1<<25);
 }
 
 #if 0
@@ -393,6 +400,21 @@ static void ddr_fab_clk_div(uint32_t div_val)
     misc_clk_div1(SOC_MISC_BASE, 0x11c,div_val,0,7);
 }
 
+static void rmii_clk_ref_div(uint32_t div_val)
+{
+    misc_clk_div1(SOC_MISC_BASE, 0x19c,div_val,0,7);
+}
+
+static void xec0_clk_div(uint32_t div_val)
+{
+    misc_clk_div1(SOC_MISC_BASE, 0x1a0,div_val,0,7);
+}
+
+static void ptp_ref_clk_div(uint32_t div_val)
+{
+    misc_clk_div1(SOC_MISC_BASE, 0x1a8,div_val,0,7);
+}
+
 void ddr_top0_set_rst(ControlStatus Status)
 {
     misc_reset_cfg(SOC_MISC_BASE,0x20,16,Status);
@@ -416,14 +438,14 @@ void ddr_top0_ddr_dfs_ack_pulse(void)
 
 void ddr_top0_clk_mux_sel(uint32_t src_sel)
 {
-    REG32(SOC_MISC_BASE+0x174) &= ~(GENMASK(17, 16));
-    REG32(SOC_MISC_BASE+0x174) = src_sel<<16;
-    for (volatile int i=0; i<100; i++);
+    REG32(SOC_MISC_BASE + 0x174) &= ~(GENMASK(17, 16));
+    REG32(SOC_MISC_BASE + 0x174) = src_sel<<16;
+    for (volatile int i = 0; i < 100; i++);
 }
 
 void ddr_top0_clk_en(ControlStatus Status)
 {
-    misc_clk_cfg1(SOC_MISC_BASE,0x40,16,Status);
+    misc_clk_cfg1(SOC_MISC_BASE, 0x40, 16, Status);
 }
 
 #if 0
@@ -443,6 +465,13 @@ void soc_clk_init(void)
     rtc0_clk_div(9);
     ddr_fab_clk_div(1);
     sdio0_data_clk_div(3);
+	/* rmii clk is fixed 50MHZ */
+	rmii_clk_ref_div(7);
+	/* config xec sys_clk to div16,usually 25MHZ */
+	xec0_clk_div(15);
+	/* config ptp clk to div4, usually 100MHZ */
+	ptp_ref_clk_div(3);
+
     //usart0_clk_div(1);
     clock_pll_cfg(SYS_CLK_PLL, SYS_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_400MHZ);
     //clock_pll_cfg(SYS_CLK_PLL, SYS_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_384MHZ);
@@ -452,4 +481,5 @@ void soc_clk_init(void)
     cpu_clk_i_mux_sel(CPU_CLK_I_MUX_SEL_SYS_CLK_PLL);
     ddr_fab_clk_mux_sel(DDR_FAB_CLK_MUX_SEL_SYS_CLK_PLL);
     sdio_clk_mux_sel(DDR_FAB_CLK_MUX_SEL_SYS_CLK_PLL);
+    xec_clk_mux_sel(XEC_CLK_MUX_SEL_SYS_CLK_PLL);
 }
