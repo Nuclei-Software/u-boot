@@ -61,24 +61,23 @@ uint8_t CheckMailboxOutFreeStatus(MAILBOX_TypeDef* pMailbox, uint8_t mbx_num, ui
   * \param  inLen input plaintext or ciphertext byte length
   * \param  outAddrLow the lower 32bit start address storing the output ciphertext or plaintext 
   * \param  outAddrHi the high 32bit start address storing the output ciphertext or plaintext 
-  * \param  outLen output ciphertext or plaintext byte length
   */
 void mailbox_cryp_in_token_set(mailbox_cryp_cmd_in_token *cmd_t, 
                                uint8_t *iv, 
                                uint8_t *key, 
                                uint8_t keySel, uint8_t encrypt, uint8_t nonceLen, uint8_t keyLen, uint8_t mode, uint8_t algo,
-                               uint32_t dataLen, uint32_t inAddrLow, uint32_t inAddrHi, uint32_t inLen, 
-                               uint32_t outAddrLow, uint32_t outAddrHi, uint32_t outLen)
+                               uint32_t update_mode, uint32_t inAddrLow, uint32_t inAddrHi, uint32_t inLen,
+                               uint32_t outAddrLow, uint32_t outAddrHi)
 {
     cmd_t->cryp.header.opcode = SECURE_SERVICE_OPCODE_CRYP;
     cmd_t->cryp.identity = (SECURE_SERVICE_OPCODE_CRYP << 28) | (algo << 20) | (mode << 16) | (keySel << 8) | (keyLen << 4) | (encrypt);
-    cmd_t->cryp.length = dataLen;
+    cmd_t->cryp.length = inLen;
     cmd_t->cryp.inputdata_addr_low = inAddrLow;
     cmd_t->cryp.inputdata_addr_hig = inAddrHi;
     cmd_t->cryp.inputdata_length = inLen;
     cmd_t->cryp.outputdata_addr_low = outAddrLow;
     cmd_t->cryp.outputdata_addr_hig = outAddrHi;
-    cmd_t->cryp.outputdata_length = outLen;
+    cmd_t->cryp.outputdata_length = inLen;
 
     cmd_t->cryp.cmd_cfg.encryp = encrypt;
     cmd_t->cryp.cmd_cfg.algo = algo;
@@ -86,6 +85,7 @@ void mailbox_cryp_in_token_set(mailbox_cryp_cmd_in_token *cmd_t,
     cmd_t->cryp.cmd_cfg.NonceLength = nonceLen;
     cmd_t->cryp.cmd_cfg.key_sel = keySel;
     cmd_t->cryp.cmd_cfg.key_length = keyLen;
+    cmd_t->cryp.cmd_cfg.in_ctrl = update_mode;
 
     if ((mode == SECURE_SERVICE_CRYP_CBC) || (mode == SECURE_SERVICE_CRYP_CTR)) {
         memcpy( ADDR8P(cmd_t->iv), ADDR8P(iv), 16);
@@ -132,7 +132,7 @@ void mailbox_acryp_in_token_set(acryp_in_token_t *cmd_t,
     cmd_t->input_signdata_addr_low = signAddrLow;
     cmd_t->input_signdata_addr_hig = signAddrHi;
     cmd_t->input_publickey_addr_low = pubKeyAddrLow;
-    cmd_t->Input_PublicKey_addr_hig = pubKeyAddrHi;
+    cmd_t->input_PublicKey_addr_hig = pubKeyAddrHi;
 
     cmd_t->cmd_cfg.algo = algo;
     cmd_t->cmd_cfg.mode = mode;
@@ -172,7 +172,8 @@ void mailbox_hash_in_token_set(mailbox_hash_cmd_in_token *cmd_t,
 
     cmd_t->hash.cmd_cfg.algo = algo;
     cmd_t->hash.cmd_cfg.mode = mode;
-	cmd_t->hash.cmd_cfg.in_ctrl = update_mode;
+    cmd_t->hash.cmd_cfg.in_ctrl = update_mode;
+    cmd_t->hash.key_data_addr_low = *(uint32_t *)(&cmd_t->hash.cmd_cfg);
 }
 
 /**
@@ -212,7 +213,7 @@ int8_t mailbox_avaliable_linked_num(void)
   */
 void mailbox_secure_service_host_send(uint32_t *data, uint8_t opcode, uint8_t mailbox_num)
 {
-    uint32_t wBuf[32] = {0};
+    uint32_t wBuf[60] = {0};
     uint32_t mailbox_addr = 0;
 
     mailbox_addr = (CORE0_PPI_RAM_BASE + MAILBOX_BASE_ADDR_OFFSET + mailbox_num*MAILBOX_SIZE_IN_BYTE);
@@ -236,15 +237,12 @@ void mailbox_secure_service_host_send(uint32_t *data, uint8_t opcode, uint8_t ma
         case SECURE_SERVICE_OPCODE_EFUSE:
             memcpy( ADDR8P(wBuf), ADDR8P(data), sizeof(efuse_in_token_t));
             break;
-        case SECURE_SERVICE_OPCODE_BOOT:
-            memcpy( ADDR8P(wBuf), ADDR8P(data), sizeof(boot_in_token_t));
-            break;
         default:
             break;
     }
 
     /* Write command to mailbox */
-    MAILBOX_HostWriteDataToMailboxIn(CORE0_PPI_RAM, mailbox_num, ADDR32P(mailbox_addr), wBuf, 32);
+    MAILBOX_HostWriteDataToMailboxIn(CORE0_PPI_RAM, mailbox_num, ADDR32P(mailbox_addr), wBuf, 60);
     if (0 == CheckMailboxInNotFullStatus(CORE0_PPI_RAM, mailbox_num, TIMEOUT_CYCLE)) {
         debug(">>>>>>>>>>wait kernel to read command out timeout!<<<<<<<<<<\r\n");
         return;

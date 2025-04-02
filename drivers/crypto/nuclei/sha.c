@@ -134,7 +134,7 @@ static int nuclei_hash_update(void *hash_ctx, const void *buf,
  * @hash_ctx: Pointer to the context for hashing
  * @dest_buf: Pointer to the destination buffer where hash is to be copied
  * @size: Size of the buffer being hashed
- * @caam_algo: Enum for SHA1 or SHA256
+ * @nuclei_hash_algos: Enum for SHA1 or SHA256
  * Return: 0 if ok, -EINVAL on error
  */
 static int nuclei_hash_finish(void *hash_ctx, void *dest_buf,
@@ -146,7 +146,9 @@ static int nuclei_hash_finish(void *hash_ctx, void *dest_buf,
 	mailbox_hash_cmd_in_token hash_in_token = {0};
 	struct sg_entry *sg_cur;
 	uint8_t mailbox_num;
-	uint32_t rBuf[32]={0};
+	uint32_t rbuf[32];
+	uint32_t *dst, *src;
+	uint32_t update_mode;
 	
     mailbox_num = mailbox_avaliable_linked_num();
     if (mailbox_num == -1) {
@@ -159,72 +161,35 @@ static int nuclei_hash_finish(void *hash_ctx, void *dest_buf,
 	}
 
 	sg_cur = &ctx->sg_tbl[0];
-	if (ctx->sg_num >= 2) {
+	if (ctx->sg_num == 1)
+		update_mode = SECURE_SERVICE_IN_ALL;
+	else
+		update_mode = SECURE_SERVICE_IN_INIT;
+	for (int i=0; i< ctx->sg_num; sg_cur++) {
 		mailbox_hash_in_token_set(&hash_in_token, SECURE_SERVICE_HASH_MODE,
 			(hash_algo == SHA256) ? SECURE_SERVICE_HASH_SHA256 : SECURE_SERVICE_HASH_SHA1,
-			SECURE_SERVICE_IN_INIT, sg_cur->addr_lo, sg_cur->addr_hi,
+			update_mode, sg_cur->addr_lo, sg_cur->addr_hi,
 			sg_cur->len_flag & SG_ENTRY_LENGTH_MASK);
 		addr = sg_cur->addr_hi;
 		addr = addr << 32 | sg_cur->addr_lo;
 		flush_dcache_range(addr, addr + (sg_cur->len_flag & SG_ENTRY_LENGTH_MASK));
 		mailbox_secure_service_host_send((uint32_t *)(&hash_in_token), SECURE_SERVICE_OPCODE_HASH, mailbox_num);
-		mailbox_secure_service_host_receive(rBuf, mailbox_num);
-		ret = rBuf[0] & BIT(31);
-		if (ret)
+		mailbox_secure_service_host_receive(rbuf, mailbox_num);
+		ret = rbuf[0] & BIT(31);
+		if (ret) {
 			return ret;
-
-		sg_cur++;
-		for (i = 0; i < ctx->sg_num -2; i++){
-			mailbox_hash_in_token_set(&hash_in_token, SECURE_SERVICE_HASH_MODE,
-				(hash_algo == SHA256) ? SECURE_SERVICE_HASH_SHA256 : SECURE_SERVICE_HASH_SHA1,
-				SECURE_SERVICE_IN_UPDATE, sg_cur->addr_lo, sg_cur->addr_hi,
-				sg_cur->len_flag & SG_ENTRY_LENGTH_MASK);
-			addr = sg_cur->addr_hi;
-			addr = addr << 32 | sg_cur->addr_lo;
-			flush_dcache_range(addr, addr + (sg_cur->len_flag & SG_ENTRY_LENGTH_MASK));
-			mailbox_secure_service_host_send((uint32_t *)(&hash_in_token), SECURE_SERVICE_OPCODE_HASH, mailbox_num);
-			mailbox_secure_service_host_receive(rBuf, mailbox_num);
-			ret = rBuf[0] & BIT(31);
-			if (ret)
-				return ret;
-			sg_cur++;
 		}
-		mailbox_hash_in_token_set(&hash_in_token, SECURE_SERVICE_HASH_MODE,
-			(hash_algo == SHA256) ? SECURE_SERVICE_HASH_SHA256 : SECURE_SERVICE_HASH_SHA1,
-			SECURE_SERVICE_IN_END, sg_cur->addr_lo, sg_cur->addr_hi,
-			sg_cur->len_flag & SG_ENTRY_LENGTH_MASK);
-		addr = sg_cur->addr_hi;
-		addr = addr << 32 | sg_cur->addr_lo;		
-		flush_dcache_range(addr, addr + (sg_cur->len_flag & SG_ENTRY_LENGTH_MASK));
-		mailbox_secure_service_host_send((uint32_t *)(&hash_in_token), SECURE_SERVICE_OPCODE_HASH, mailbox_num);
-		mailbox_secure_service_host_receive(rBuf, mailbox_num);
-		ret = rBuf[0] & BIT(31);
-		if (ret)
-			return ret;
-		u32 *dst = (u32 *)dest_buf;
-		u32 *src = &rBuf[2];
+		i++;
+		update_mode = SECURE_SERVICE_IN_UPDATE;
+		if (i == (ctx->sg_num -1))
+			update_mode = SECURE_SERVICE_IN_END;
+	}
+	dst = (u32 *)dest_buf;
+	src = &rbuf[2];
 
-		for(i = 0; i < driver_hash[hash_algo].digestsize/4; i++)
-		 	dst[i] = be32_to_cpu(src[i]);
-	} else if (ctx->sg_num == 1) {
-		mailbox_hash_in_token_set(&hash_in_token, SECURE_SERVICE_HASH_MODE,
-			(hash_algo == SHA256) ? SECURE_SERVICE_HASH_SHA256 : SECURE_SERVICE_HASH_SHA1,
-			SECURE_SERVICE_IN_ALL, sg_cur->addr_lo, sg_cur->addr_hi,
-			sg_cur->len_flag & SG_ENTRY_LENGTH_MASK);
-		addr = sg_cur->addr_hi;
-		addr = addr << 32 | sg_cur->addr_lo;		
-		flush_dcache_range(addr, addr + (sg_cur->len_flag & SG_ENTRY_LENGTH_MASK));
-		mailbox_secure_service_host_send((uint32_t *)(&hash_in_token), SECURE_SERVICE_OPCODE_HASH, mailbox_num);
-		mailbox_secure_service_host_receive(rBuf, mailbox_num);
-		ret = rBuf[0] & BIT(31);
-		if (ret)
-			return ret;
-		u32 *dst = (u32 *)dest_buf;
-		u32 *src = &rBuf[2];
+	for(i = 0; i < driver_hash[hash_algo].digestsize/4; i++)
+		dst[i] = be32_to_cpu(src[i]);
 
-		for(i = 0; i < driver_hash[hash_algo].digestsize/4; i++)
-		 	dst[i] = be32_to_cpu(src[i]);
-	} 
 
 	free(ctx);
 	return ret;
@@ -235,8 +200,9 @@ int nuclei_hash(const unsigned char *pbuf, unsigned int buf_len,
 {
 	int ret = 0;
 	uint8_t mailbox_num;
-	uint32_t rBuf[32]={0};
+	uint32_t rbuf[32];
 	mailbox_hash_cmd_in_token hash_in_token = {0};
+	uint32_t *dst, *src;
 	
     mailbox_num = mailbox_avaliable_linked_num();
     if (mailbox_num == -1) {
@@ -249,12 +215,12 @@ int nuclei_hash(const unsigned char *pbuf, unsigned int buf_len,
 		buf_len);
 	flush_dcache_range((unsigned long)pbuf, (unsigned long)pbuf + buf_len);		
 	mailbox_secure_service_host_send((uint32_t *)(&hash_in_token), SECURE_SERVICE_OPCODE_HASH, mailbox_num);
-	mailbox_secure_service_host_receive(rBuf, mailbox_num);
-	ret = rBuf[0] & BIT(31);
+	mailbox_secure_service_host_receive(rbuf, mailbox_num);
+	ret = rbuf[0] & BIT(31);
 	if (ret)
 		return ret;
-	u32 *dst = (u32 *)pout;
-	u32 *src = &rBuf[2];
+	dst = (u32 *)pout;
+	src = &rbuf[2];
 
 	for(int i = 0; i < driver_hash[algo].digestsize/4; i++)
 	 	dst[i] = be32_to_cpu(src[i]);

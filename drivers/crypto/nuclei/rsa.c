@@ -30,7 +30,7 @@ void mailbox_acryp_in_token_setup(acryp_in_token_t *cmd_t,
     cmd_t->input_signdata_addr_low = signAddrLow;
     cmd_t->input_signdata_addr_hig = signAddrHi;
     cmd_t->input_publickey_addr_low = pubKeyAddrLow;
-    cmd_t->Input_PublicKey_addr_hig = pubKeyAddrHi;
+    cmd_t->input_PublicKey_addr_hig = pubKeyAddrHi;
 
     cmd_t->cmd_cfg.algo = algo;
     cmd_t->cmd_cfg.mode = mode;
@@ -41,7 +41,7 @@ int nuclei_mod_exp(struct udevice *dev, const uint8_t *sig, uint32_t sig_len,
 {
 	uint8_t mailbox_num;
 	acryp_in_token_t acryp_in_token = {0};
-	uint32_t rBuf[32]={0};
+	uint32_t rbuf[32];
 	int ret = 0;
 
 	(void)dev;
@@ -61,9 +61,9 @@ int nuclei_mod_exp(struct udevice *dev, const uint8_t *sig, uint32_t sig_len,
 	flush_dcache_range((size_t)prop->modulus, (size_t)prop->modulus + prop->num_bits/8);
 	flush_dcache_range((size_t)sig, (size_t)sig + sig_len);
 	mailbox_secure_service_host_send((uint32_t *)(&acryp_in_token), SECURE_SERVICE_OPCODE_ACRYP, mailbox_num);
-	mailbox_secure_service_host_receive(rBuf, mailbox_num);
-	if (rBuf[0] & BIT(31)) {
-		debug("rsa verify fail, %x\n", rBuf[0]);
+	mailbox_secure_service_host_receive(rbuf, mailbox_num);
+	if (rbuf[0] & BIT(31)) {
+		debug("rsa verify fail, %x\n", rbuf[0]);
 		ret = -EIO;
 	} else {
 		invalidate_dcache_range((size_t)sig, (size_t)sig + sig_len);

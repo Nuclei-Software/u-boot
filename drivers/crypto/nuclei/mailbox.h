@@ -25,10 +25,12 @@
 #define SECURE_SERVICE_HASH_SHA512                          5
 #define SECURE_SERVICE_HASH_SM3                             6
 #define SECURE_SERVICE_HASH_SHA384                          7
-#define HASH_SUPPORT_ALGO_MAX_NUM                           8
+#define HASH_TABLE_MAX                                      8
+#define SECURE_SERVICE_HASH_DIGEST_OFFSET                   8
+#define SECURE_SERVICE_HASH_KEY_OFFSET                      24
+/* hash mode */
 #define SECURE_SERVICE_HASH_MODE                            0
 #define SECURE_SERVICE_HMAC_MODE                            1
-#define SECURE_SERVICE_HASH_DIGEST_OFFSET                   8
 // cryp
 #define SECURE_SERVICE_CRYP_KEY_SEL_CFG                     0
 #define SECURE_SERVICE_CRYP_KEY_SEL_GRP0                    1
@@ -57,6 +59,7 @@
 #define SECURE_SERVICE_CRYP_SM4                             1
 
 #define CRYP_TABLE_MAX                                      2
+
 #define SECURE_SERVICE_CRYP_IV_OFFSET                       10
 #define SECURE_SERVICE_CRYP_KEY_OFFSET                      14
 
@@ -103,7 +106,8 @@ struct cryp_cmd_cfg{
     uint32_t NonceLength:4;
     uint32_t encryp:1;
     uint32_t key_sel:4;
-    uint32_t reserved:11;
+    uint32_t in_ctrl :4;
+    uint32_t reserved :7;
 };
 
 typedef struct {
@@ -129,7 +133,7 @@ typedef struct {
     uint32_t input_signdata_addr_low;
     uint32_t input_signdata_addr_hig;
     uint32_t input_publickey_addr_low;
-    uint32_t Input_PublicKey_addr_hig;
+    uint32_t input_PublicKey_addr_hig;
     struct cmd_cfg_t cmd_cfg;
 } acryp_in_token_t;
 
@@ -151,15 +155,12 @@ typedef struct {
     uint32_t inputdata_addr_low;
     uint32_t inputdata_addr_hig;
     uint32_t inputdata_length;
+    uint32_t key_data_addr_low;
+    uint32_t key_data_addr_hig;
     struct cmd_cfg_t cmd_cfg;
 } hash_in_token_t;
 
-typedef struct {
-    struct common_head_t header;
-    uint32_t identity;
-    uint32_t length;
-    uint32_t fw_addr;
-} boot_in_token_t;
+
 
 typedef struct {
     uint32_t tokenid:16;
@@ -178,7 +179,8 @@ typedef struct {
 typedef struct {
     hash_in_token_t hash;           /* hash secure service struct */
     uint32_t rescv;  
-    uint32_t digest[16];            /* IV data buffer */
+    uint32_t digest[16];            /* digest data buffer */
+    uint8_t key[128];            /* digest data buffer */
 } mailbox_hash_cmd_in_token;
 
 /**
@@ -234,7 +236,7 @@ void mailbox_cryp_in_token_set(mailbox_cryp_cmd_in_token *cmd_t,
                                uint8_t *iv, 
                                uint8_t *key, 
                                uint8_t keySel, uint8_t encrypt, uint8_t nonceLen, uint8_t keyLen, uint8_t mode, uint8_t algo,
-                               uint32_t dataLen, uint32_t inAddrLow, uint32_t inAddrHi, uint32_t inLen, 
-                               uint32_t outAddrLow, uint32_t outAddrHi, uint32_t outLen);
+                               uint32_t update_mode, uint32_t inAddrLow, uint32_t inAddrHi, uint32_t inLen,
+                               uint32_t outAddrLow, uint32_t outAddrHi);
 
 #endif
