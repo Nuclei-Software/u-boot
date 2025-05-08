@@ -19,6 +19,8 @@ int spl_soc_init(void)
 	return 0;
 }
 
+extern void soc_clk_init(void);
+extern int ddr_init(void);
 void harts_early_init(void)
 {
 	soc_clk_init();

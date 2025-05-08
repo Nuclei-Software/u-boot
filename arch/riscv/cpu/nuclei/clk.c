@@ -338,7 +338,7 @@ static int clock_pll_is_locked(enum clock_pll_e pll)
     return tmp;
 }
 
-int clock_pll_cfg(enum clock_pll_e pll,uint8_t src, uint32_t freq)
+void clock_pll_cfg(enum clock_pll_e pll,uint8_t src, uint32_t freq)
 {
     clock_pll_pwr_en( pll, ENABLE);
 
@@ -422,7 +422,7 @@ void ddr_top0_set_rst(ControlStatus Status)
 
 uint32_t ddr_top0_ddr_dfs_req(void)
 {
-    return REG32(SOC_MISC_BASE + 0xc88) & BIT(3);
+    return ((REG32(SOC_MISC_BASE + 0xc88) & BIT(3)) >> 3);
 }
 
 uint32_t ddr_top0_ddr_dfs_freq(void)
