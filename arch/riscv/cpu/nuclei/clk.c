@@ -464,13 +464,14 @@ void soc_clk_init(void)
     xdc_clk_in_mux_sel(XDC_CLK_IN_MUX_SEL_OSC_CLK_16M);
     rtc0_clk_div(9);
     ddr_fab_clk_div(1);
-    sdio0_data_clk_div(3);
-	/* rmii clk is fixed 50MHZ */
-	rmii_clk_ref_div(7);
-	/* config xec sys_clk to div16,usually 25MHZ */
-	xec0_clk_div(15);
-	/* config ptp clk to div4, usually 100MHZ */
-	ptp_ref_clk_div(3);
+    /* SDIO clk 200MHZ */
+    sdio0_data_clk_div(1);
+    /* rmii clk is fixed 50MHZ */
+    rmii_clk_ref_div(7);
+    /* config xec sys_clk to div16,usually 25MHZ */
+    xec0_clk_div(15);
+    /* config ptp clk to div4, usually 100MHZ */
+    ptp_ref_clk_div(3);
 
     //usart0_clk_div(1);
     clock_pll_cfg(SYS_CLK_PLL, SYS_CLK_IN_MUX_SEL_OSC_CLK_16M, PLL_MUL_400MHZ);
