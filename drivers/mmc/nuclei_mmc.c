@@ -6,6 +6,7 @@
  */
 
 #include <common.h>
+#include <clk.h>
 #include <malloc.h>
 #include <mmc.h>
 #include <asm/global_data.h>
@@ -29,6 +30,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SDIO_TX_SADDR				0x10
 #define SDIO_TX_SIZE				0x14
 #define SDIO_TX_CFG					0x18
+#define SDIO_VERSION				0x1C
 #define SDIO_CMD_OP					0x20
 #define SDIO_CMD_ARG				0x24
 #define SDIO_DATA_SETUP				0x28
@@ -41,6 +43,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SDIO_STATUS					0x44
 #define SDIO_DATA_TIMEOUT_CNT		0x50
 #define SDIO_CMD_POWERUP_CNT		0x54
+#define SDIO_CMD_WAIT_RSP_CNT		0x58
 #define SDIO_TX_DATA				0x60
 #define SDIO_RX_DATA				0x64
 #define SDIO_TX_MARK				0x68
@@ -70,6 +73,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SDIO_CR_DMA_EN				BIT(0)
 #define SDIO_CR_DDR_EN				BIT(1)
 
+#define SDIO_RXFIFO_RX_IRQ			BIT(1)
 #define SDIO_RXFIFO_EMPTY			BIT(2)
 #define SDIO_TXFIFO_FULL			BIT(3)
 
@@ -85,53 +89,60 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SDIO_CMD_OP_CRC_EN			BIT(2)
 #define SDIO_CMD_OP_POWER_EN		BIT(4)
 #define SDIO_CMD_OP_CRC_CHECK_EN	BIT(5)
+#define SDIO_CMD_OP_CMD_EN			BIT(7)
+#define SDIO_CMD_RSP_MASK			GENMASK(3,0)
+#define SDIO_CMD_OP_MASK			GENMASK(13,8)
+
 #define SDIO_DATA_SETUP_EN			BIT(0)
 #define SDIO_DATA_SETUP_RD			BIT(1)
 #define SDIO_DATA_SETUP_MODE		GENMASK(3,2)
 #define SDIO_DATA_SETUP_BLK_NUM		GENMASK(19, 4)
 #define SDIO_DATA_SETUP_BLK_SIZE	GENMASK(31, 20)
 
-/*poll mode max timeout 1000 is work well */
-#define NUCLEI_MMC_MAX_TIMEOUT		1000
+#define NUCLEI_MMC_MAX_TIMEOUT		0xFFFFFFFF
 
 #define NUCLEI_MISC_BASE			0xf8b300000
 #define NUCLEI_IOMUX_BASE			0xf8bc00000
 
-#define NUCLEI_MMC_INPUT_CLK		100000000
+#define NUCLEI_MMC_RX_WMARK			56
 
 #define CONFIG_NUCLEI_MMC_PIO
 
 struct nuclei_mmc_plat {
 	struct mmc_config cfg;
 	struct mmc mmc;
+	struct clk clk;
 };
 
 struct nuclei_mmc_priv {
-	void __iomem		*regs;
-	u32			flags;
+	void __iomem *regs;
+	u32 flags;
 /* priv flags */
 #define NUCLEI_MMC_BUS_WIDTH_MASK	0x3
 #define NUCLEI_MMC_BUS_WIDTH_1		0x0
 #define NUCLEI_MMC_BUS_WIDTH_4		0x1
 #define NUCLEI_MMC_BUS_WIDTH_8		0x2
-/* Because hardware limit tranfersize to 1M,
- * so each segment maxlen fixed to 1Mb-512b
- * dma_segment_num indicate dma transfer times.
+/*
+ * Because hardware limit tranfersize to 1M,
+ * so each segment maxlen fixed to 1MB-512B
  */
-	int			dma_cmdarg;
-	int			dma_remain_blocks;
+	u32 dma_cmdarg;
+	u32 dma_remain_blocks;
+	u32 bus_clk_rate;
+	u32 rx_watermark;
+	u32 tx_watermark;
 };
 
 static int nuclei_mmc_config_clock(struct nuclei_mmc_priv *priv, struct mmc *mmc)
 {
 	int clk_div = 0;
 
-	clk_div = NUCLEI_MMC_INPUT_CLK / mmc->clock;
-	if (NUCLEI_MMC_INPUT_CLK % mmc->clock)
+	clk_div = priv->bus_clk_rate / mmc->clock;
+	if (priv->bus_clk_rate % mmc->clock)
 		clk_div++;
 	if (clk_div < 2)
 		return -EINVAL;
-	printf("clk_div:%x\n", clk_div);
+	printf("clk_div:%x-%x-%x\n", clk_div,priv->bus_clk_rate, mmc->clock);
 	writel((clk_div >> 1) - 1, priv->regs + SDIO_CLK_DIV);
 
 	return 0;
@@ -148,9 +159,10 @@ static int nuclei_mmc_wait_for_completion(struct nuclei_mmc_priv *priv)
 		if (stat & SDIO_STATUS_EOT) {
 			break;
 		}
-		udelay(100);
+		udelay(50);
 	}
 
+	if ((stat & SDIO_STATUS_EOT)==0) printf("timeout overflow\n");
 	/* check err */
 	if (stat & SDIO_STATUS_CMDERR_RSP_TO){
 		printf("%s resp timeout\n", __func__);
@@ -211,40 +223,52 @@ static int nuclei_mmc_setup_pio(struct nuclei_mmc_priv *priv, struct mmc_data *d
 
 static int nuclei_mmc_wait_pio(struct nuclei_mmc_priv *priv, struct mmc_data *data)
 {
-	int sz = data->blocks * data->blocksize;
-	uint32_t *buf;
-	int timeout = NUCLEI_MMC_MAX_TIMEOUT;
-	uint32_t reg;
+	size_t sz = data->blocks * data->blocksize;
+	u32 *buf;
+	u32 timeout = NUCLEI_MMC_MAX_TIMEOUT;
+	u32 reg;
+	int i;
 
-	if (data->flags & MMC_DATA_READ){
-		buf = data->dest;
+	if (data->flags & MMC_DATA_READ) {
+		buf = (u32 *)data->dest;
 		while (sz > 0 && timeout > 0) {
 			reg = readl(priv->regs + SDIO_IP);
-			if (!(reg & SDIO_RXFIFO_EMPTY)) {
-				*buf++ = readl(priv->regs + SDIO_RX_DATA);
-				sz -= 4;
+			if (sz >= NUCLEI_MMC_RX_WMARK * 4){
+				if (reg & SDIO_RXFIFO_RX_IRQ) {
+					for(i = 0; i < NUCLEI_MMC_RX_WMARK; i++)
+						*buf++ = readl(priv->regs + SDIO_RX_DATA);
+					sz -= NUCLEI_MMC_RX_WMARK * 4;
+				} else {
+					timeout--;
+					udelay(50);
+				}
 			} else {
-				timeout--;
-				udelay(100);
+				if (!(reg & SDIO_RXFIFO_EMPTY)) {
+					*buf++ = readl(priv->regs + SDIO_RX_DATA);
+					sz -= 4;
+				} else {
+					timeout--;
+					udelay(50);
+				}
 			}
 		}
-	}
-	else if (data->flags & MMC_DATA_WRITE) {
-		buf = data->src;
+	} else if (data->flags & MMC_DATA_WRITE) {
+		buf = (u32 *)data->src;
 		while (sz > 0 && timeout > 0) {
 			reg = readl(priv->regs + SDIO_IP);
 			if (!(reg & SDIO_TXFIFO_FULL)) {
 				writel(*buf++, priv->regs + SDIO_TX_DATA);
 				sz -= 4;
-			} else
+			} else {
 				timeout--;
-				udelay(100);
+				udelay(50);
+			}
 		}
 	}
 	if (timeout == 0)
 		return -ECOMM;
 	dump_data(data->dest, data->blocks * data->blocksize);
-	return nuclei_mmc_wait_for_completion(priv);
+	return 0;
 }
 #else
 void dump_reg(struct nuclei_mmc_priv *priv)
@@ -273,11 +297,11 @@ void dump_reg(struct nuclei_mmc_priv *priv)
 
 static int nuclei_mmc_setup_dma(struct nuclei_mmc_priv *priv, struct mmc_data *data)
 {
-	int sz = data->blocks * data->blocksize;
-	uint8_t *buf;
-	uint32_t reg;
+	size_t sz = data->blocks * data->blocksize;
+	u8 *buf;
+	u32 reg;
 	dma_addr_t dma_addr;
-	uint32_t val;
+	u32 val;
 
 	/* setup data */
 	val = SDIO_DATA_SETUP_EN;
@@ -302,7 +326,6 @@ static int nuclei_mmc_setup_dma(struct nuclei_mmc_priv *priv, struct mmc_data *d
 	reg |= SDIO_CR_DMA_EN;
 	writel(reg, priv->regs + SDIO_CR);
 
-	//printf("len:0x%x,ds:0x%x\n",sz, val);
 	if (data->flags & MMC_DATA_READ){
 		buf = data->dest;
 		dma_addr = dma_map_single(buf, sz, DMA_FROM_DEVICE);
@@ -324,10 +347,10 @@ static int nuclei_mmc_setup_dma(struct nuclei_mmc_priv *priv, struct mmc_data *d
 
 static int nuclei_mmc_wait_dma(struct nuclei_mmc_priv *priv, struct mmc_data *data)
 {
-	uint32_t reg;
-	uint8_t *buf;
-	uint32_t sz = data->blocks * data->blocksize;
-	uint32_t val;
+	u32 reg;
+	u8 *buf;
+	u32 sz = data->blocks * data->blocksize;
+	u32 val;
 
 	if (data->flags & MMC_DATA_READ){
 		buf = data->dest;
@@ -422,7 +445,10 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 	}
 
 	/* setup command and response*/
-	val = cmd->cmdidx << 8;
+	val = readl(priv->regs + SDIO_CMD_OP);
+	val &=~SDIO_CMD_OP_MASK;
+	val &=~SDIO_CMD_RSP_MASK;
+	val |= cmd->cmdidx << 8;
 	val |= cmd->resp_type & 0xf;
 	writel(val, priv->regs + SDIO_CMD_OP);
 	writel(cmd->cmdarg, priv->regs + SDIO_CMD_ARG);
@@ -444,10 +470,15 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 		writel(val, priv->regs + SDIO_CR);
 #endif
 	}
-
 	/* start transmission */
 	writel(1, priv->regs + SDIO_START);
 
+	if (data)
+#if defined(CONFIG_NUCLEI_MMC_PIO)
+		ret = nuclei_mmc_wait_pio(priv, data);
+#else
+		ret = nuclei_mmc_wait_dma(priv, data);
+#endif
 	ret = nuclei_mmc_wait_for_completion(priv);
 	if (ret) {
 		printf("%s: transmission err\n", __func__);
@@ -465,13 +496,6 @@ static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 			cmd->response[0] = readl(priv->regs + SDIO_RSP0);
 		}
 	}
-
-	if (data) 
-#if defined(CONFIG_NUCLEI_MMC_PIO)
-		ret = nuclei_mmc_wait_pio(priv, data);
-#else
-		ret = nuclei_mmc_wait_dma(priv, data);
-#endif
 
 	return ret;
 }
@@ -563,9 +587,12 @@ static int nuclei_mmc_core_init(struct mmc *mmc)
 	/* disable interrupt */
 	writel(0, priv->regs + SDIO_IE);
 
-	/* Maximum timeouts */
-	writel(0xffffffff, priv->regs + SDIO_DATA_TIMEOUT_CNT);
+	priv->rx_watermark = NUCLEI_MMC_RX_WMARK;
+	writel(priv->rx_watermark - 1, priv->regs + SDIO_RX_MARK);
 
+	/* Maximum timeouts */
+	writel(0xFFFFFFFF, priv->regs + SDIO_DATA_TIMEOUT_CNT);
+	writel(0x1000, priv->regs + SDIO_CMD_WAIT_RSP_CNT);
 #if !defined(CONFIG_NUCLEI_MMC_PIO)
 	writel(SDIO_DMA_INT_EN_RX_FTRANS, priv->regs + SDIO_DMA_INTR_EN);
 	//ret = readl(priv->regs + SDIO_CR);
@@ -609,6 +636,15 @@ static int nuclei_mmc_of_to_plat(struct udevice *dev)
 	int ret;
 
 	priv->regs = map_physmem(dev_read_addr(dev), 0x1000, MAP_NOCACHE);
+	if (!priv->regs) {
+		dev_err(dev, "can't get registers base address\n");
+		return -ENOENT;
+	}
+
+	ret = clk_get_by_index(dev, 0, &plat->clk);
+	if (ret < 0)
+		return ret;
+
 	cfg = &plat->cfg;
 
 	cfg->name = "nuclei_mmc";
@@ -637,12 +673,28 @@ static int nuclei_mmc_bind(struct udevice *dev)
 
 static int nuclei_mmc_probe(struct udevice *dev)
 {
+	int ret;
+	unsigned long clk_rate;
 	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
 	struct nuclei_mmc_priv *priv = dev_get_priv(dev);
 	struct nuclei_mmc_plat *plat = dev_get_plat(dev);
 
 	plat->mmc.priv = priv;
 	upriv->mmc = &plat->mmc;
+
+	/* enable clock */
+	ret = clk_enable(&plat->clk);
+	if (ret < 0)
+		return ret;
+
+	clk_rate = clk_get_rate(&plat->clk);
+	if (!clk_rate)
+		return -EINVAL;
+
+	priv->bus_clk_rate = clk_rate;
+
+	printf("SDIO Version:%x ", readl(priv->regs + SDIO_VERSION));
+
 	return nuclei_mmc_core_init(&plat->mmc);
 }
 
