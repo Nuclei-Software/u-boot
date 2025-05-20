@@ -101,8 +101,8 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define NUCLEI_MMC_MAX_TIMEOUT		0xFFFFFFFF
 
-#define NUCLEI_MISC_BASE			0xf8b300000
-#define NUCLEI_IOMUX_BASE			0xf8bc00000
+#define NUCLEI_MISC_BASE			0xf8b300000UL
+#define NUCLEI_IOMUX_BASE			0xf8bc00000UL
 
 #define NUCLEI_MMC_RX_WMARK			56
 
@@ -206,7 +206,7 @@ void dump_data(char *buf, int len)
 }
 
 #if defined(CONFIG_NUCLEI_MMC_PIO)
-static int nuclei_mmc_setup_pio(struct nuclei_mmc_priv *priv, struct mmc_data *data)
+static void nuclei_mmc_setup_pio(struct nuclei_mmc_priv *priv, struct mmc_data *data)
 {
 	u32 val = 0;
 
@@ -431,8 +431,7 @@ check_finished:
 static int nuclei_mmc_send_cmd(struct mmc *mmc, struct nuclei_mmc_priv *priv,
 			   struct mmc_cmd *cmd, struct mmc_data *data)
 {
-	u32 stat, mask, cmdat = 0;
-	int i, ret=0;
+	int ret=0;
 	ulong start = get_timer(0);
 	ulong timeout = 50000;
 	u32 val = 0;
@@ -572,17 +571,17 @@ static int nuclei_mmc_core_init(struct mmc *mmc)
 	int ret;
 
 	/* Reset */
-	ret = readl(NUCLEI_MISC_BASE + 0x20);
+	ret = readl((void*)(NUCLEI_MISC_BASE + 0x20));
 	ret &= ~(1<<8);
-	writel(ret, NUCLEI_MISC_BASE + 0x20);
+	writel(ret, (void*)(NUCLEI_MISC_BASE + 0x20));
 	ret |= 1<<8 ;
-	writel(ret, NUCLEI_MISC_BASE + 0x20);
+	writel(ret, (void*)(NUCLEI_MISC_BASE + 0x20));
 
-	ret = readl(NUCLEI_MISC_BASE + 0x20);
+	ret = readl((void*)(NUCLEI_MISC_BASE + 0x20));
 	ret &= ~(1<<9);
-	writel(ret, NUCLEI_MISC_BASE + 0x20);
+	writel(ret, (void*)(NUCLEI_MISC_BASE + 0x20));
 	ret |= 1<<9 ;
-	writel(ret, NUCLEI_MISC_BASE + 0x20);
+	writel(ret, (void*)(NUCLEI_MISC_BASE + 0x20));
 
 	/* disable interrupt */
 	writel(0, priv->regs + SDIO_IE);

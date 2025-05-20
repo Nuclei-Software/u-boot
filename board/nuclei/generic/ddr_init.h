@@ -15,6 +15,7 @@ extern void ddr_top0_clk_mux_sel(uint32_t src_sel);
 extern void ddr_top0_set_rst(ControlStatus Status);
 extern void ddr_top0_ddr_dfs_ack_pulse(void);
 extern uint32_t ddr_top0_ddr_dfs_freq(void);
+extern void ddr_top0_clk_en(ControlStatus Status);
 
 #define XDC_VER_OFFSET                                                0x0 /*!< VER */
 #define XDC_MODE_OFFSET                                               0x4 /*!< MODE */
