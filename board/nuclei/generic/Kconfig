@@ -48,24 +48,28 @@ config BOARD_SPECIFIC_OPTIONS # dummy
 
 config KERNEL_FIT_LOAD_ADDR
 	hex
+	prompt "kernel fit load address"
 	default 0x83000000
 	help
 	  config kernel fit image load address.
 
 config DTB_LOAD_ADDR
 	hex
+	prompt "dtb load address"
 	default 0x88000000
 	help
 	  config dtb load address.
 
 config KERNEL_FLASH_ADDR
 	hex
+	prompt "kernel address in xipflash"
 	default 0x20100000
 	help
 	  config kernel start address in flash when boot from xipflash.
 
 config KERNEL_FLASH_SIZE
 	hex
+	prompt "kernel size in xipflash"
 	default 0xC00000
 	help
 	  config kernel size in flash when boot from xipflash.
