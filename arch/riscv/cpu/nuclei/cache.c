@@ -3,6 +3,7 @@
 #include <irq_func.h>
 #include <asm/cache.h>
 #include <asm/arch-nuclei/csr.h>
+#include <asm/barrier.h>
 
 #define CACHE_LINE_SHIFT		6
 #define CACHE_LINE_SIZE			(1 << CACHE_LINE_SHIFT)
@@ -67,6 +68,7 @@ void invalidate_dcache_range(size_t start, size_t stop)
 {
 	ccm_cache_ops(start, stop, CCM_DC_INVAL);
 	ccm_flush_pipe();
+	mb();
 }
 
 /* writeback and invalidate cache */
@@ -74,4 +76,5 @@ void flush_dcache_range(size_t start, size_t stop)
 {
 	ccm_cache_ops(start, stop, CCM_DC_WBINVAL);
 	ccm_flush_pipe();
+	mb();
 }
