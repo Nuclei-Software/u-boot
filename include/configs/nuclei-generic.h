@@ -22,10 +22,11 @@
 #define CFG_EXTRA_ENV_SETTINGS \
 	"fdt_high=0xffffffffffffffff\0" \
 	"initrd_high=0xffffffffffffffff\0" \
+	"bootloc=.\0" \
 	"mmcdev=0x0\0" \
 	"fit_load_addr=" __stringify(CONFIG_KERNEL_FIT_LOAD_ADDR) "\0" \
 	"dtb_load_addr=" __stringify(CONFIG_DTB_LOAD_ADDR) "\0" \
-	"mmcloadfit=fatload mmc ${mmcdev} ${fit_load_addr} kernel_rootfs.itb \0" \
+	"mmcloadfit=fatload mmc ${mmcdev} ${fit_load_addr} ${bootloc}/kernel_rootfs.itb \0" \
 	"mmcboot_fit= echo Trying load from mmc..; run mmcloadfit; bootm ${fit_load_addr}:kernel ${fit_load_addr}:ramdisk  ${dtb_load_addr} \0" \
 	"kernel_flash_addr=" __stringify(CONFIG_KERNEL_FLASH_ADDR) "\0" \
 	"kernel_flash_size=" __stringify(CONFIG_KERNEL_FLASH_SIZE) "\0" \
