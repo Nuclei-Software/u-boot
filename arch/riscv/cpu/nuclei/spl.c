@@ -21,4 +21,9 @@ int spl_soc_init(void)
 
 void harts_early_init(void)
 {
+	#define CCM_SUEN	0x7CE
+	#define CCM_SEN		0x2020202
+
+	/* enable ccm ops for smode */
+	csr_write(CCM_SUEN, CCM_SEN);
 }

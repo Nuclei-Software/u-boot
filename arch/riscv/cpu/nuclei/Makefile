@@ -6,3 +6,4 @@ else
 obj-y += cpu.o
 obj-y += dram.o
 endif
+obj-y += cache.o
