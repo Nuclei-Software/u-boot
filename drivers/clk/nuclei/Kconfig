@@ -1,0 +1,7 @@
+config CLK_NUCLEI
+	bool "Enable clock driver support for NUCLEI SOC"
+	depends on CLK
+	default y
+	help
+	  This clock driver adds support for RCC clock management
+	  for NUCLEI SoCs.
