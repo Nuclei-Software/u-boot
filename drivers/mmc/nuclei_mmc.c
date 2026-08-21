@@ -19,6 +19,7 @@
 #include <wait_bit.h>
 #include <dm.h>
 #include <linux/dma-mapping.h>
+#include <reset.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -105,9 +106,6 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define NUCLEI_MMC_MAX_TIMEOUT		0xFFFFFFFF
 
-#define NUCLEI_MISC_BASE			0xf9c880000ULL
-#define NUCLEI_IOMUX_BASE			0xf9ca00000ULL
-
 #define NUCLEI_MMC_RX_WMARK			56
 
 #define CONFIG_NUCLEI_MMC_PIO
@@ -115,7 +113,8 @@ DECLARE_GLOBAL_DATA_PTR;
 struct nuclei_mmc_plat {
 	struct mmc_config cfg;
 	struct mmc mmc;
-	struct clk clk;
+	struct clk apb_clk;
+	struct clk kern_clk;
 };
 
 struct nuclei_mmc_priv {
@@ -340,18 +339,6 @@ static int nuclei_mmc_core_init(struct mmc *mmc)
 	struct nuclei_mmc_priv *priv = mmc->priv;
 	uint32_t val;
 
-	/* sdio clk en */
-	val = readl((void*)(NUCLEI_MISC_BASE + 0x48));
-	val |= 1<<21 ;
-	writel(val, (void*)(NUCLEI_MISC_BASE + 0x48));
-
-	/* Reset sdio ip */
-	val = readl((void*)(NUCLEI_MISC_BASE + 0x28));
-	val &= ~(1<<21);
-	writel(val, (void*)(NUCLEI_MISC_BASE + 0x28));
-	val |= 1<<21 ;
-	writel(val, (void*)(NUCLEI_MISC_BASE + 0x28));
-
 	/* disable interrupt */
 	writel(0, priv->regs + SDIO_IE);
 
@@ -408,7 +395,11 @@ static int nuclei_mmc_of_to_plat(struct udevice *dev)
 		return -ENOENT;
 	}
 
-	ret = clk_get_by_index(dev, 0, &plat->clk);
+	ret = clk_get_by_index(dev, 0, &plat->apb_clk);
+	if (ret < 0)
+		return ret;
+
+	ret = clk_get_by_index(dev, 1, &plat->kern_clk);
 	if (ret < 0)
 		return ret;
 
@@ -442,6 +433,7 @@ static int nuclei_mmc_probe(struct udevice *dev)
 {
 	int ret;
 	unsigned long clk_rate;
+	struct reset_ctl rst;
 	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
 	struct nuclei_mmc_priv *priv = dev_get_priv(dev);
 	struct nuclei_mmc_plat *plat = dev_get_plat(dev);
@@ -449,19 +441,29 @@ static int nuclei_mmc_probe(struct udevice *dev)
 	plat->mmc.priv = priv;
 	upriv->mmc = &plat->mmc;
 
-	/* enable clock */
-	ret = clk_enable(&plat->clk);
+	/* enable apb clock */
+	ret = clk_enable(&plat->apb_clk);
 	if (ret < 0)
 		return ret;
 
-	clk_rate = clk_get_rate(&plat->clk);
+	ret = clk_enable(&plat->kern_clk);
+	if (ret < 0)
+		return ret;
+
+	clk_rate = clk_get_rate(&plat->kern_clk);
 	if (!clk_rate)
 		return -EINVAL;
 
 	priv->bus_clk_rate = clk_rate;
+	ret = reset_get_by_index(dev, 0, &rst);
+	if (!ret) {
+	    reset_assert(&rst);
+	    udelay(2);
+	    reset_deassert(&rst);
+	}
 
 	nuclei_mmc_core_init(&plat->mmc);
-	printf("SDIO Version:%x ", readl(priv->regs + SDIO_VERSION));
+	dev_dbg(dev, "ip_version:%x ", readl(priv->regs + SDIO_VERSION));
 
 	return 0;
 }
